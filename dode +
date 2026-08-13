@@ -1,0 +1,347 @@
+from pathlib import Path
+
+html = r'''<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Mini Battle</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",Arial,sans-serif;color:#fff;background:#101114}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;min-height:100vh;background:radial-gradient(circle at top,#252a36,#0d0e12 70%);display:flex;justify-content:center}
+#app{width:100%;max-width:520px;min-height:100vh;padding:24px 16px 34px}
+.screen{display:none;min-height:calc(100vh - 58px);flex-direction:column;justify-content:center}
+.screen.active{display:flex}
+.card{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:24px;padding:20px;box-shadow:0 12px 40px rgba(0,0,0,.25);backdrop-filter:blur(12px)}
+h1{font-size:42px;text-align:center;margin:0 0 8px}
+h2{text-align:center;margin:0 0 18px}
+.subtitle{text-align:center;color:#b9beca;margin:0 0 28px}
+button{width:100%;border:0;border-radius:16px;padding:16px;margin:7px 0;font-size:17px;font-weight:700;color:#fff;background:#2b3040;cursor:pointer}
+button:active{transform:scale(.98)}
+.primary{background:#1677ff}
+.danger{background:#9d2d3d}
+.muted{background:#20242d}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
+.stat{background:rgba(0,0,0,.18);padding:11px;border-radius:14px;text-align:center;font-size:14px}
+.bar{height:14px;background:#30343d;border-radius:99px;overflow:hidden;margin:7px 0 5px}
+.fill{height:100%;width:100%;background:#32d583;transition:width .25s ease}
+.enemy .fill{background:#ff5364}
+.character{text-align:center;font-size:72px;margin:8px 0}
+.name{text-align:center;font-weight:800;font-size:20px}
+.log{min-height:74px;display:flex;align-items:center;justify-content:center;text-align:center;background:rgba(0,0,0,.18);border-radius:16px;padding:12px;margin:12px 0;color:#e8ebf2}
+.actions{margin-top:5px}
+.small{text-align:center;color:#aeb4c0;font-size:13px;margin-top:10px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#victory h2,#gameover h2{font-size:30px}
+.reward{text-align:center;font-size:16px;line-height:1.8;margin:10px 0 18px}
+</style>
+</head>
+<body>
+<div id="app">
+
+<section id="menu" class="screen active">
+  <div class="card">
+    <div class="character">⚔️</div>
+    <h1>MINI BATTLE</h1>
+    <p class="subtitle">Mini RPG — combat au tour par tour</p>
+    <button id="playBtn" class="primary">🎮 JOUER</button>
+    <button id="scoreBtn">🏆 SCORE</button>
+    <button id="helpBtn">ℹ️ COMMENT JOUER</button>
+  </div>
+</section>
+
+<section id="score" class="screen">
+  <div class="card">
+    <h2>🏆 MEILLEUR SCORE</h2>
+    <div class="reward">Score : <strong id="bestScore">0</strong></div>
+    <button id="scoreBack" class="muted">⬅️ RETOUR</button>
+  </div>
+</section>
+
+<section id="help" class="screen">
+  <div class="card">
+    <h2>📖 COMMENT JOUER</h2>
+    <div class="reward">
+      ⚔️ Attaque l'ennemi.<br>
+      🛡️ Réduis les dégâts de sa prochaine attaque.<br>
+      🧪 Récupère 30 PV avec une potion.<br>
+      🏃 Tente de fuir.<br>
+      🎲 Les combats utilisent du hasard.<br>
+      🏆 Gagne des combats pour obtenir XP, pièces et score.
+    </div>
+    <button id="helpBack" class="muted">⬅️ RETOUR</button>
+  </div>
+</section>
+
+<section id="game" class="screen">
+  <div class="card">
+    <h2>⚔️ COMBAT</h2>
+    <div class="enemy">
+      <div id="enemyEmoji" class="character">👾</div>
+      <div id="enemyName" class="name">Gobelin</div>
+      <div class="bar"><div id="enemyBar" class="fill"></div></div>
+      <div id="enemyHPText" class="small">50 / 50 PV</div>
+    </div>
+
+    <div class="log" id="log">Un ennemi apparaît...</div>
+
+    <div>
+      <div id="playerEmoji" class="character">🧙</div>
+      <div class="name">Héros</div>
+      <div class="bar"><div id="playerBar" class="fill"></div></div>
+      <div id="playerHPText" class="small">100 / 100 PV</div>
+    </div>
+
+    <div class="stats">
+      <div class="stat">⚔️ ATK<br><strong id="atkText">15</strong></div>
+      <div class="stat">🧪 POTIONS<br><strong id="potionsText">3</strong></div>
+      <div class="stat">⭐ NIVEAU<br><strong id="levelText">1</strong></div>
+      <div class="stat">✨ XP<br><strong id="xpText">0</strong></div>
+      <div class="stat">💰 PIÈCES<br><strong id="coinsText">0</strong></div>
+      <div class="stat">🏆 SCORE<br><strong id="scoreText">0</strong></div>
+    </div>
+
+    <div class="actions">
+      <button id="attackBtn" class="primary">⚔️ ATTAQUER</button>
+      <button id="defendBtn">🛡️ DÉFENDRE</button>
+      <button id="potionBtn">🧪 POTION</button>
+      <button id="fleeBtn" class="danger">🏃 FUIR</button>
+    </div>
+  </div>
+</section>
+
+<section id="victory" class="screen">
+  <div class="card">
+    <div class="character">🏆</div>
+    <h2>VICTOIRE !</h2>
+    <div class="reward" id="victoryText"></div>
+    <button id="nextBtn" class="primary">⚔️ COMBAT SUIVANT</button>
+    <button id="victoryMenu" class="muted">🏠 MENU</button>
+  </div>
+</section>
+
+<section id="gameover" class="screen">
+  <div class="card">
+    <div class="character">💀</div>
+    <h2>GAME OVER</h2>
+    <div class="reward" id="gameoverText"></div>
+    <button id="retryBtn" class="primary">🔄 REJOUER</button>
+    <button id="gameoverMenu" class="muted">🏠 MENU</button>
+  </div>
+</section>
+
+<section id="final" class="screen">
+  <div class="card">
+    <div class="character">🐉</div>
+    <h2>🏆 VICTOIRE FINALE !</h2>
+    <div class="reward" id="finalText"></div>
+    <button id="finalMenu" class="primary">🏠 MENU</button>
+  </div>
+</section>
+
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const screens = ["menu","score","help","game","victory","gameover","final"];
+
+const enemies = [
+  {name:"Gobelin",emoji:"👾",maxHP:50,atk:8},
+  {name:"Loup",emoji:"🐺",maxHP:60,atk:10},
+  {name:"Squelette",emoji:"💀",maxHP:70,atk:12},
+  {name:"Orc",emoji:"👹",maxHP:100,atk:16}
+];
+
+let player, enemy, victories, defending, gameLocked;
+
+function show(id){
+  screens.forEach(s => $(s).classList.remove("active"));
+  $(id).classList.add("active");
+  window.scrollTo(0,0);
+}
+
+function random(min,max){return Math.floor(Math.random()*(max-min+1))+min;}
+
+function saveBest(){
+  const old = Number(localStorage.getItem("miniBattleBest") || 0);
+  if(player && player.score > old) localStorage.setItem("miniBattleBest", String(player.score));
+}
+
+function updateUI(){
+  $("enemyEmoji").textContent = enemy.emoji;
+  $("enemyName").textContent = enemy.name;
+  $("enemyHPText").textContent = `${Math.max(0,enemy.hp)} / ${enemy.maxHP} PV`;
+  $("playerHPText").textContent = `${Math.max(0,player.hp)} / ${player.maxHP} PV`;
+  $("enemyBar").style.width = `${Math.max(0,enemy.hp)/enemy.maxHP*100}%`;
+  $("playerBar").style.width = `${Math.max(0,player.hp)/player.maxHP*100}%`;
+  $("atkText").textContent = player.atk;
+  $("potionsText").textContent = player.potions;
+  $("levelText").textContent = player.level;
+  $("xpText").textContent = player.xp;
+  $("coinsText").textContent = player.coins;
+  $("scoreText").textContent = player.score;
+}
+
+function startGame(){
+  player = {hp:100,maxHP:100,atk:15,potions:3,level:1,xp:0,coins:0,score:0};
+  victories = 0;
+  defending = false;
+  startBattle();
+}
+
+function startBattle(){
+  if(victories >= 5){
+    enemy = {name:"Dragon",emoji:"🐉",maxHP:250,hp:250,atk:25,boss:true};
+  } else {
+    const e = enemies[random(0,enemies.length-1)];
+    enemy = {...e,hp:e.maxHP,boss:false};
+  }
+  defending = false;
+  gameLocked = false;
+  show("game");
+  updateUI();
+  $("log").textContent = enemy.boss ? "🔥 Le DRAGON apparaît !" : `⚔️ ${enemy.name} apparaît !`;
+}
+
+function enemyTurn(){
+  if(enemy.hp <= 0 || player.hp <= 0) return;
+  const roll = random(1,100);
+  let damage = 0, message = "";
+  if(roll <= 15){ damage = Math.round(enemy.atk*1.5); message = "💥 ATTAQUE PUISSANTE !"; }
+  else if(roll <= 90){ damage = enemy.atk; message = "⚔️ L'ennemi attaque !"; }
+  else { message = "💨 L'ennemi rate son attaque !"; }
+  if(defending && damage > 0){
+    damage = Math.max(1,Math.round(damage*0.5));
+    message += " 🛡️ Défense : dégâts réduits !";
+  }
+  defending = false;
+  player.hp = Math.max(0,player.hp-damage);
+  $("log").textContent = damage ? `${message} Tu perds ${damage} PV.` : message;
+  updateUI();
+  if(player.hp <= 0) setTimeout(gameOver,350);
+}
+
+function attack(){
+  if(gameLocked) return;
+  gameLocked = true;
+  const roll = random(1,100);
+  let damage = 0, message = "";
+  if(roll <= 10){damage=player.atk*2;message="💥 COUP CRITIQUE !";}
+  else if(roll <= 80){damage=player.atk;message="⚔️ COUP NORMAL !";}
+  else if(roll <= 95){damage=Math.max(1,Math.floor(player.atk/2));message="😐 COUP FAIBLE !";}
+  else {message="💨 RATÉ !";}
+  enemy.hp = Math.max(0,enemy.hp-damage);
+  $("log").textContent = damage ? `${message} ${enemy.name} perd ${damage} PV.` : message;
+  updateUI();
+  if(enemy.hp <= 0){setTimeout(winBattle,350);return;}
+  setTimeout(()=>{gameLocked=false;enemyTurn();},450);
+}
+
+function defend(){
+  if(gameLocked) return;
+  gameLocked = true;
+  defending = true;
+  $("log").textContent = "🛡️ Tu te protèges pour la prochaine attaque !";
+  setTimeout(()=>{gameLocked=false;enemyTurn();},350);
+}
+
+function potion(){
+  if(gameLocked) return;
+  if(player.potions <= 0){$("log").textContent="❌ Tu n'as plus de potion !";return;}
+  if(player.hp >= player.maxHP){$("log").textContent="❤️ Tes PV sont déjà au maximum.";return;}
+  gameLocked = true;
+  const healed = Math.min(30,player.maxHP-player.hp);
+  player.hp += healed;
+  player.potions--;
+  $("log").textContent = `🧪 Potion utilisée ! +${healed} PV.`;
+  updateUI();
+  setTimeout(()=>{gameLocked=false;enemyTurn();},350);
+}
+
+function flee(){
+  if(gameLocked) return;
+  gameLocked = true;
+  if(random(1,100) <= 60){
+    $("log").textContent = "🏃 Fuite réussie !";
+    setTimeout(()=>show("menu"),350);
+  } else {
+    $("log").textContent = "❌ Impossible de fuir !";
+    setTimeout(()=>{gameLocked=false;enemyTurn();},350);
+  }
+}
+
+function levelUp(){
+  const thresholds = [0,50,100,200,350];
+  while(player.level < 5 && player.xp >= thresholds[player.level]){
+    player.level++;
+    player.atk += 5;
+    player.maxHP += 20;
+    player.hp = player.maxHP;
+    $("log").textContent = `🎉 Niveau ${player.level} atteint ! ATK +5, PV max +20.`;
+  }
+}
+
+function randomEvent(){
+  const r = random(1,100);
+  if(r <= 50){player.coins += 10; return "💰 Événement : +10 pièces !";}
+  if(r <= 80){player.potions++; return "🧪 Événement : +1 potion !";}
+  if(r <= 95){player.hp=Math.min(player.maxHP,player.hp+20); return "❤️ Événement : +20 PV !";}
+  player.score += 100; return "💎 Événement rare : +100 score !";
+}
+
+function winBattle(){
+  gameLocked = true;
+  victories++;
+  player.score += 100;
+  player.xp += 20;
+  player.coins += 10;
+  levelUp();
+  let event = enemy.boss ? "🐉 Le Dragon est vaincu !" : randomEvent();
+  saveBest();
+  updateUI();
+  if(enemy.boss){
+    $("finalText").innerHTML = `Score : <strong>${player.score}</strong><br>Niveau : <strong>${player.level}</strong><br>XP : <strong>${player.xp}</strong><br>Pièces : <strong>${player.coins}</strong><br><br>${event}`;
+    show("final");
+  } else {
+    $("victoryText").innerHTML = `+100 score • +20 XP • +10 pièces<br><br>${event}<br><br>Score : <strong>${player.score}</strong>`;
+    show("victory");
+  }
+}
+
+function nextBattle(){startBattle();}
+
+function gameOver(){
+  saveBest();
+  $("gameoverText").innerHTML = `Score final : <strong>${player.score}</strong><br>Niveau : <strong>${player.level}</strong><br>XP : <strong>${player.xp}</strong><br>Pièces : <strong>${player.coins}</strong>`;
+  show("gameover");
+}
+
+function showScore(){
+  $("bestScore").textContent = localStorage.getItem("miniBattleBest") || "0";
+  show("score");
+}
+
+$("playBtn").addEventListener("click",startGame);
+$("scoreBtn").addEventListener("click",showScore);
+$("helpBtn").addEventListener("click",()=>show("help"));
+$("scoreBack").addEventListener("click",()=>show("menu"));
+$("helpBack").addEventListener("click",()=>show("menu"));
+$("attackBtn").addEventListener("click",attack);
+$("defendBtn").addEventListener("click",defend);
+$("potionBtn").addEventListener("click",potion);
+$("fleeBtn").addEventListener("click",flee);
+$("nextBtn").addEventListener("click",nextBattle);
+$("victoryMenu").addEventListener("click",()=>show("menu"));
+$("retryBtn").addEventListener("click",startGame);
+$("gameoverMenu").addEventListener("click",()=>show("menu"));
+$("finalMenu").addEventListener("click",()=>show("menu"));
+
+show("menu");
+</script>
+</body>
+</html>
+'''
+path = Path("/mnt/data/index.html")
+path.write_text(html, encoding="utf-8")
+print(f"Fichier créé : {path} ({path.stat().st_size} octets)")
