@@ -1,0 +1,540 @@
+VISI0N M0BIL — BUILD A SELF-CONTAINED BROWSER-BASED MIXED REALITY EXPERIENCE
+
+1. ROLE AND MAIN OBJECTIVE
+
+You are a senior web developer and computer vision engineer specializing in:
+
+* JavaScript and modern web technologies.
+* Computer vision and real-time image processing.
+* Hand landmark detection and gesture recognition.
+* 3D graphics and WebGL.
+* Three.js or equivalent browser-based rendering tools.
+* Camera and motion sensor integration.
+* Real-time interactive interfaces.
+* Performance optimization for mobile devices.
+
+I will provide three existing project files:
+
+* index.html
+* main.js
+* styles.css
+
+Your first task is to inspect all three files completely, understand the existing architecture, identify bugs, and preserve working features.
+
+Your main task is to transform this project into an advanced browser-based mixed reality experience inspired by the visual design and interactions of Meta Quest.
+
+This must be a real, working web application, not a visual mockup or a static demonstration.
+
+The application must run directly in a web browser, especially Safari on iPhone, and must be deployable through GitHub Pages.
+
+2. STRICT TECHNICAL REQUIREMENTS
+
+These requirements are mandatory.
+
+Everything must run inside the website.
+
+The entire application must execute locally in the browser.
+
+Do not create:
+
+* A Windows executable.
+* A desktop application.
+* A Node.js server.
+* A Python backend.
+* A remote processing server.
+* A database.
+* A cloud AI service.
+* A WebSocket server.
+* A separate application that the user must install.
+
+All camera processing, gesture recognition, scene management, depth estimation, and 3D rendering must happen inside the browser.
+
+GitHub Pages must only host the static project files.
+
+The application must not require a separate computer to process its images.
+
+Do not use WebXR.
+
+Do not use:
+
+* WebXR Device API.
+* Immersive AR sessions.
+* Immersive VR sessions.
+* WebXR hit testing.
+* WebXR anchors.
+* WebXR depth sensing.
+* Any feature that requires a WebXR-compatible headset.
+
+Do not implement WebXR as a fallback.
+
+Instead, build the experience using standard browser technologies and your own JavaScript logic.
+
+Allowed technologies
+
+You may use:
+
+* HTML5.
+* CSS3.
+* JavaScript.
+* Canvas 2D.
+* WebGL.
+* Three.js for 3D rendering.
+* MediaPipe Hands or MediaPipe Tasks Vision for local hand landmark detection.
+* Locally executed computer vision models, if genuinely necessary.
+* Web Workers where supported.
+* DeviceOrientationEvent and DeviceMotionEvent where supported.
+* Standard browser camera APIs.
+
+Third-party libraries must execute locally in the browser. They must not send camera images to remote servers.
+
+Prefer bundling libraries and model assets inside the GitHub repository rather than relying on external CDNs.
+
+Important distinction: Use your own JavaScript algorithms for gesture recognition, interaction logic, smoothing, object tracking, spatial approximations, and scene management. A locally executed hand landmark model is acceptable if it substantially improves detection accuracy.
+
+Do not claim that a feature is implemented if it is only simulated.
+
+3. VISUAL DESIGN — META QUEST-INSPIRED INTERFACE
+
+The application must have a premium spatial computing interface inspired by Meta Quest.
+
+Design requirements:
+
+* Futuristic but clean interface.
+* Dark and elegant visual theme.
+* Floating virtual windows.
+* Transparent glass-like panels.
+* Soft shadows.
+* Subtle lighting.
+* Smooth transitions.
+* Depth-based visual hierarchy.
+* Rounded interface elements.
+* Modern typography.
+* Responsive layout.
+* Immersive 3D elements.
+
+Avoid the appearance of a conventional website with ordinary buttons placed over a camera feed.
+
+The objective is to create a convincing spatial interface that feels like a lightweight mixed reality operating system.
+
+4. REAR CAMERA — HIGHEST PRIORITY
+
+The current project has a camera selection problem: it sometimes activates the front-facing camera.
+
+Fix this completely.
+
+Requirements:
+
+* Use the rear camera only.
+* Request facingMode: { exact: "environment" } where supported.
+* Never silently switch to the front camera.
+* If the rear camera is unavailable, show a clear error message.
+* Verify the active video track and camera settings when possible.
+* Prevent multiple camera streams from running simultaneously.
+* Properly stop old camera tracks before restarting the camera.
+* Provide a reliable restart camera button.
+* Handle permission errors and unsupported devices.
+
+Inspect the existing MediaPipe Camera Utils implementation.
+
+If its Camera helper starts another camera stream or conflicts with the manually requested camera stream, remove it.
+
+Use a controlled video-processing loop that reads frames directly from the already active rear-camera stream.
+
+The application must never open an unintended second camera stream.
+
+5. HAND TRACKING AND GESTURE RECOGNITION
+
+Improve hand detection significantly.
+
+The system should support:
+
+* Both hands.
+* 21 landmarks per detected hand.
+* Finger position tracking.
+* Stable landmark movement.
+* Jitter reduction.
+* Temporary detection loss handling.
+* Gesture recognition.
+* Optional hand skeleton visualization.
+* Low processing latency.
+
+Use a locally executed hand landmark detection model when necessary.
+
+Implement the gesture interpretation logic yourself in JavaScript.
+
+Required gestures
+
+1. Thumb and index finger pinch: select an object.
+2. Sustained pinch: grab and move an object.
+3. Open hand: release the selected object.
+4. Two-hand interaction: resize and scale a virtual window.
+5. Open palm: show or hide the main menu.
+6. Hand movement: control a spatial cursor.
+7. Pinch and drag: reposition virtual objects.
+
+Gestures must include:
+
+* Configurable sensitivity.
+* Activation thresholds.
+* Release thresholds.
+* Debouncing.
+* Smoothing.
+* Protection against accidental repeated actions.
+
+Avoid triggering multiple commands from a single gesture.
+
+6. 3D ENGINE AND VIRTUAL ENVIRONMENT
+
+Create a persistent 3D scene using WebGL and Three.js or an equivalent browser-based rendering solution.
+
+The 3D system must support:
+
+* A persistent virtual scene.
+* A virtual camera.
+* 3D objects.
+* Floating virtual windows.
+* Object transformations.
+* Independent object movement.
+* Depth-based positioning.
+* Smooth animations.
+* Interactive elements.
+* Consistent coordinate systems.
+
+Virtual objects must be independent of the ordinary HTML interface.
+
+Build a clear separation between:
+
+* The camera background.
+* The 3D scene.
+* The user interface.
+* The hand tracking overlay.
+* The depth visualization layer.
+
+Do not use WebXR for any part of this system.
+
+7. DEPTH ESTIMATION AND ENVIRONMENT UNDERSTANDING
+
+Develop a browser-based depth estimation system.
+
+The application should attempt to provide:
+
+* Relative depth estimation.
+* Near and far object classification.
+* Visual depth maps.
+* Object segmentation.
+* Basic object detection.
+* Temporal object tracking.
+* Approximate spatial relationships.
+* A point-cloud-like visualization when enough depth information exists.
+
+Clearly distinguish between:
+
+Relative depth
+
+Estimate whether an object appears closer or farther away.
+
+This may use image analysis, local contrast, perspective cues, and locally executed computer vision models.
+
+Metric depth
+
+Estimate an object’s distance in meters.
+
+Only display metric measurements when a technically justified calibration or depth model supports them.
+
+Never invent precise distances from ordinary RGB pixels.
+
+3D reconstruction
+
+Create an approximate 3D representation of the environment only when the available visual information supports it.
+
+Do not pretend that a decorative point cloud is a real room reconstruction.
+
+Object tracking
+
+Track detected objects between successive camera frames and estimate their movement.
+
+When reliable spatial tracking is impossible, clearly label the result as approximate.
+
+8. PHONE MOVEMENT AND SENSOR INTEGRATION
+
+Use available phone sensors when the browser permits access:
+
+* Gyroscope.
+* Accelerometer.
+* Device orientation.
+* Device motion.
+
+Implement:
+
+* Orientation tracking.
+* Camera view stabilization.
+* Smooth rotation updates.
+* Motion visualization.
+* Optional sensor calibration.
+* Permission handling.
+
+On browsers requiring permission, request it from a user interaction.
+
+Important: Orientation data provides rotational information. It does not independently provide reliable absolute position or full 6DoF tracking.
+
+Do not claim that the application has true spatial tracking when it only uses gyroscope data.
+
+Use visual tracking and other browser-accessible information where possible, but clearly communicate the accuracy limitations.
+
+9. FLOATING VIRTUAL WINDOWS
+
+Build a complete virtual window management system inspired by Meta Quest.
+
+Each window must support:
+
+* Selection.
+* Movement.
+* Resizing.
+* Closing.
+* Minimizing.
+* Reopening.
+* Independent positioning.
+* Depth-based placement.
+* Gesture interaction.
+* Smooth animations.
+
+Implement the following window types:
+
+* Video player.
+* Dashboard.
+* Clock.
+* Settings.
+* Media player.
+* Information panel.
+* Custom content window.
+
+A web browser window may be included only where normal browser security restrictions permit it.
+
+Each window should have:
+
+* A clean title bar.
+* Rounded corners.
+* Transparent surfaces.
+* Subtle shadows.
+* Depth effects.
+* Smooth transitions.
+* Independent controls.
+
+10. MAIN INTERFACE
+
+Create an immersive home interface containing:
+
+* Main menu.
+* Dashboard.
+* Camera controls.
+* Environment scan control.
+* Hand tracking toggle.
+* Depth visualization toggle.
+* 3D settings.
+* Window manager.
+* Performance monitor.
+* Sensor information.
+* Application settings.
+
+Allow the user to enable or disable independently:
+
+* Hand tracking.
+* Hand skeleton.
+* 3D rendering.
+* Depth estimation.
+* Object tracking.
+* Sensor tracking.
+* Animations.
+* Visual effects.
+
+Display clear status indicators for every active system.
+
+11. PERFORMANCE OPTIMIZATION
+
+The application must be optimized for iPhone and Safari.
+
+Requirements:
+
+* Adaptive camera resolution.
+* Adaptive processing frequency.
+* Efficient rendering.
+* Low memory usage.
+* Avoid unnecessary calculations.
+* Avoid blocking the main interface.
+* Release unused resources.
+* Properly dispose of 3D objects and textures.
+* Handle browser tab suspension.
+* Handle camera interruptions.
+* Avoid memory leaks.
+
+Create two performance profiles:
+
+Performance mode
+
+* Lower camera processing resolution.
+* Reduced visual effects.
+* Reduced processing frequency.
+* Prioritize responsiveness.
+
+Quality mode
+
+* Higher rendering quality.
+* Better visual effects.
+* Higher processing resolution when supported.
+* More detailed visualizations.
+
+The application must automatically adapt when the device becomes overloaded.
+
+Do not promise a fixed frame rate without testing.
+
+12. BROWSER COMPATIBILITY AND GITHUB PAGES
+
+The project must work as a static website hosted on GitHub Pages.
+
+Requirements:
+
+* No backend.
+* No local server requirement for normal deployment.
+* No Node.js runtime requirement for the published application.
+* No Python runtime requirement.
+* No database.
+* No external processing service.
+* Relative file paths.
+* HTTPS compatibility.
+* Correct asset loading.
+* Camera permission handling.
+* Sensor permission handling.
+* Graceful compatibility fallbacks.
+
+Test and document support for:
+
+* Safari on iPhone.
+* Chrome on Android.
+* Chrome on desktop.
+
+Do not assume that all browsers expose the same camera, sensor, graphics, or machine-learning capabilities.
+
+Detect browser capabilities at runtime.
+
+If a feature is unsupported, disable it gracefully and explain why.
+
+The published GitHub Pages application must be usable without a development server.
+
+13. CODE ARCHITECTURE
+
+You may completely refactor the existing three files.
+
+You may create additional JavaScript, CSS, HTML, and local model files when necessary.
+
+However:
+
+* Preserve working existing features.
+* Do not remove functionality without a clear reason.
+* Avoid duplicate functions.
+* Keep modules organized.
+* Add useful code comments.
+* Centralize important configuration values.
+* Implement proper error handling.
+* Avoid unnecessary dependencies.
+* Use stable library versions.
+* Avoid remote processing services.
+* Keep all runtime processing inside the browser.
+
+The architecture should remain understandable and maintainable.
+
+14. REQUIRED TESTING
+
+Before delivery, verify as much as possible:
+
+1. The rear camera starts correctly.
+2. The front camera is never selected.
+3. Only one camera stream is active.
+4. Camera restart works.
+5. Hand landmarks are detected.
+6. Gesture recognition works.
+7. Accidental gesture activation is reduced.
+8. Virtual windows can be moved.
+9. Virtual windows can be resized.
+10. The 3D scene renders correctly.
+11. Depth visualization works.
+12. Sensor permissions are handled.
+13. The application remains responsive.
+14. Assets load from GitHub Pages.
+15. The project does not require a backend.
+
+If a feature cannot be tested on a real iPhone, clearly state that limitation.
+
+Never claim that a test passed if it was not actually performed.
+
+15. REQUIRED DELIVERY
+
+I do not want explanations alone or incomplete code snippets.
+
+Deliver:
+
+* Complete corrected index.html.
+* Complete corrected main.js.
+* Complete corrected styles.css.
+* All additional required source files.
+* All required local assets and model files, subject to licensing.
+* A clean folder structure.
+* A README with setup instructions.
+* Exact GitHub Pages deployment instructions.
+* A list of implemented features.
+* A list of browser limitations.
+* A list of features that remain approximate or experimental.
+
+Never replace code with placeholders such as “…”.
+
+Never claim that an unfinished feature is complete.
+
+16. DEVELOPMENT WORKFLOW
+
+Follow this order:
+
+Step 1 — Inspect
+
+Read all three original files completely.
+
+Identify the existing functionality, bugs, dependencies, and architectural problems.
+
+Step 2 — Technical feasibility
+
+Before coding, classify requested features as:
+
+* Fully achievable in the browser.
+* Achievable with limitations.
+* Experimental or approximate.
+* Not realistically achievable under the stated constraints.
+
+Do not silently promise impossible features.
+
+Step 3 — Architecture
+
+Design a clear architecture using only browser-side technologies.
+
+Step 4 — Implementation
+
+Correct the camera system first.
+
+Then implement hand tracking, gesture recognition, 3D rendering, depth estimation, and interface improvements.
+
+Step 5 — Testing
+
+Test the actual code and report which features have been verified.
+
+Step 6 — Delivery
+
+Provide the complete project files and GitHub Pages deployment instructions.
+
+17. FINAL GOAL
+
+The final result should be an ambitious browser-based mixed reality application inspired by Meta Quest.
+
+It should use the iPhone rear camera, hand tracking, gesture controls, 3D virtual objects, floating windows, visual depth estimation, and phone motion sensors.
+
+The entire application must run locally inside the browser, without WebXR, without a backend, without cloud processing, and without a separate installed application.
+
+Prioritize real functionality, technical accuracy, performance, and compatibility over impressive but fake visual effects.
+
+Start by fully inspecting the three provided files. Then explain the technical issues you found, establish a realistic implementation plan, and build the complete improved application.
