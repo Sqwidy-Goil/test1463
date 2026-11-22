@@ -39,10 +39,12 @@
       <span class="screen-depth" id="anchor-label" aria-hidden="true">ÉCRAN FLOTTANT</span>
     </section>
 
-    <div class="vr-menu" id="vr-menu" hidden aria-label="Menu VR">
-      <button type="button" data-vr-action="reanchor">⌖ Réancrer</button>
-      <button type="button" data-vr-action="close-screen">✕ Fermer l’écran</button>
-      <button type="button" data-vr-action="exit">⏻ Quitter VR</button>
+    <div class="vr-taskbar" id="vr-taskbar" hidden aria-label="Barre VR">
+      <button type="button" class="vr-btn" data-vr-action="reanchor" title="Réancrer">⌖</button>
+      <button type="button" class="vr-btn" data-vr-action="scan" title="Scan 3D">◌</button>
+      <button type="button" class="vr-btn" data-vr-action="play" title="Lecture/Pause">▶</button>
+      <button type="button" class="vr-btn" data-vr-action="close-screen" title="Fermer l’écran">✕</button>
+      <button type="button" class="vr-btn" data-vr-action="exit" title="Quitter VR">⏻</button>
     </div>
 
     <canvas id="hand-canvas" width="1280" height="720" aria-hidden="true"></canvas>
