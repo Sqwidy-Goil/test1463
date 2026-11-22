@@ -33,6 +33,7 @@
       <div class="screen-content">
         <video id="uploaded-video" controls playsinline></video>
         <div class="empty-video" id="empty-video">Choisissez une vidéo pour créer un écran.</div>
+        <button class="screen-play" id="screen-play" type="button" aria-label="Lecture" hidden>▶</button>
       </div>
       <span class="resize-handle" id="resize-handle" aria-label="Redimensionner">↘</span>
       <span class="screen-depth" id="anchor-label" aria-hidden="true">ÉCRAN FLOTTANT</span>
@@ -53,7 +54,7 @@
       <button class="motion-button" id="motion-button" type="button" disabled>⌖ Ancrer l’écran</button>
       <button class="scan-button" id="scan-button" type="button" disabled>◌ Scanner la pièce</button>
       <button class="upload-button" id="upload-button" type="button" disabled>＋ Ajouter une vidéo</button>
-      <button class="vr-button" id="vr-button" type="button">🥽 VR</button>
+      <button class="vr-button" id="vr-button" type="button" disabled>🥽 VR</button>
       <input id="video-file" type="file" accept="video/*" hidden>
     </nav>
   </main>
