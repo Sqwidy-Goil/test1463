@@ -4,27 +4,26 @@ html, body, main { width: 100%; height: 100%; }
 body { margin: 0; overflow: hidden; background: #0b1020; color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; -webkit-tap-highlight-color: transparent; }
 button { font-family: inherit; }
 
-/* --- Couches de base (z-index croissants) --- */
-/* 1 vignette · 2 scan · 5 écran vidéo · 8 menu VR · 10 main · 12 curseur · 15 UI téléphone */
+/* Ordre des couches : caméra(0) < vignette(1) < scan(2) < écran vidéo(5) < taskbar(8) < main(50) < curseur(60) < UI téléphone(70) */
 .room-camera { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; background: radial-gradient(circle at 50% 38%, #2c4162, #090d1b 70%); }
 .vignette { position: fixed; z-index: 1; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 42%, rgba(1, 4, 14, .34) 100%); }
 #scan-canvas { position: fixed; z-index: 2; inset: 0; width: 100%; height: 100%; pointer-events: none; mix-blend-mode: screen; }
 
-/* La main est devant l'écran vidéo et le menu VR → sensation de réalité mixte */
-#hand-canvas { position: fixed; z-index: 10; inset: 0; width: 100%; height: 100%; pointer-events: none; mix-blend-mode: normal; opacity: 1; }
+/* MAIN devant l'écran et la taskbar */
+#hand-canvas { position: fixed; z-index: 50; inset: 0; width: 100%; height: 100%; pointer-events: none; mix-blend-mode: normal; opacity: 1; }
 
-.controls { position: fixed; z-index: 15; top: max(18px, env(safe-area-inset-top)); left: max(18px, env(safe-area-inset-left)); max-width: min(340px, calc(100vw - 36px)); padding: 14px 17px; border: 1px solid rgba(103, 219, 255, .3); border-radius: 14px; background: var(--panel); box-shadow: 0 12px 36px rgba(0, 0, 0, .3); backdrop-filter: blur(12px); pointer-events: none; transition: opacity .25s ease; }
+.controls { position: fixed; z-index: 70; top: max(18px, env(safe-area-inset-top)); left: max(18px, env(safe-area-inset-left)); max-width: min(340px, calc(100vw - 36px)); padding: 14px 17px; border: 1px solid rgba(103, 219, 255, .3); border-radius: 14px; background: var(--panel); box-shadow: 0 12px 36px rgba(0, 0, 0, .3); backdrop-filter: blur(12px); pointer-events: none; transition: opacity .25s ease; }
 .eyebrow { color: var(--cyan); font-size: 10px; font-weight: 800; letter-spacing: .15em; } h1 { margin: 4px 0 9px; font-size: 22px; line-height: 1; letter-spacing: -.03em; } h1 span { color: var(--cyan); }
 .status-row { display: flex; align-items: center; gap: 8px; color: #c4d5eb; font-size: 12px; font-weight: 600; }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #f1ae45; box-shadow: 0 0 12px currentColor; }
 .status-dot.ready { background: #55edaf; } .status-dot.active { background: var(--cyan); }
 
-.scan-hud { position: fixed; z-index: 15; top: max(20px, env(safe-area-inset-top)); right: max(20px, env(safe-area-inset-right)); display: flex; align-items: center; gap: 7px; padding: 8px 10px; border: 1px solid rgba(101, 255, 196, .42); border-radius: 999px; background: rgba(4, 34, 31, .72); color: #85ffce; font-size: 9px; font-weight: 800; letter-spacing: .09em; backdrop-filter: blur(10px); }
+.scan-hud { position: fixed; z-index: 70; top: max(20px, env(safe-area-inset-top)); right: max(20px, env(safe-area-inset-right)); display: flex; align-items: center; gap: 7px; padding: 8px 10px; border: 1px solid rgba(101, 255, 196, .42); border-radius: 999px; background: rgba(4, 34, 31, .72); color: #85ffce; font-size: 9px; font-weight: 800; letter-spacing: .09em; backdrop-filter: blur(10px); }
 .scan-dot { width: 6px; height: 6px; border-radius: 50%; background: #6affaa; box-shadow: 0 0 12px #6affaa; animation: scan-pulse 1.2s ease-in-out infinite; }
 @keyframes scan-pulse { 50% { opacity: .25; transform: scale(.65); } }
 
-/* Écran vidéo (z-index 5) */
-.ar-screen { --yaw: -3deg; --pitch: 1deg; --lift: 0px; position: fixed; z-index: 5; left: 0; top: 0; width: min(520px, 72vw); height: min(330px, 45vw); min-width: 220px; min-height: 160px; overflow: hidden; border: 1px solid rgba(124, 228, 255, .95); border-radius: 16px; background: #080b15; box-shadow: 0 calc(26px + var(--lift)) calc(48px + var(--lift)) rgba(0, 0, 0, .58), 0 0 0 1px rgba(68, 150, 255, .2) inset, 0 0 calc(30px + var(--lift)) rgba(68, 173, 255, .16); transform: perspective(1200px) translateZ(18px) rotateY(var(--yaw)) rotateX(var(--pitch)); transform-origin: center; transition: box-shadow .18s ease, border-color .14s ease; will-change: transform, left, top, width, height; touch-action: none; user-select: none; -webkit-user-select: none; }
+/* Écran vidéo : taille en vmin → identique en portrait et paysage */
+.ar-screen { --yaw: -3deg; --pitch: 1deg; --lift: 0px; position: fixed; z-index: 5; left: 0; top: 0; width: min(520px, 78vmin); height: calc(min(520px, 78vmin) * 0.64); min-width: 220px; min-height: 160px; max-width: 94vw; max-height: 82vh; overflow: hidden; border: 1px solid rgba(124, 228, 255, .95); border-radius: 16px; background: #080b15; box-shadow: 0 calc(26px + var(--lift)) calc(48px + var(--lift)) rgba(0, 0, 0, .58), 0 0 0 1px rgba(68, 150, 255, .2) inset, 0 0 calc(30px + var(--lift)) rgba(68, 173, 255, .16); transform: perspective(1200px) translateZ(18px) rotateY(var(--yaw)) rotateX(var(--pitch)); transform-origin: center; transition: box-shadow .18s ease, border-color .14s ease; will-change: transform, left, top, width, height; touch-action: none; user-select: none; -webkit-user-select: none; }
 .ar-screen::after { position: absolute; z-index: 5; right: 8%; bottom: -6%; left: 8%; height: 10%; content: ""; background: radial-gradient(ellipse at center, rgba(0, 0, 0, .45), transparent 72%); filter: blur(6px); pointer-events: none; }
 .ar-screen::before { position: absolute; z-index: 4; top: 34px; left: 0; width: 100%; height: 36%; content: ""; background: linear-gradient(115deg, rgba(255,255,255,.13), transparent 34%); pointer-events: none; }
 .ar-screen.grabbed { border-color: #f6fbff; box-shadow: 0 28px 55px rgba(0, 0, 0, .55), 0 0 0 3px rgba(69, 221, 255, .6), 0 0 30px rgba(69, 221, 255, .42); }
@@ -42,25 +41,28 @@ button { font-family: inherit; }
 .screen-play { position: absolute; z-index: 6; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 56px; height: 56px; border: 2px solid var(--cyan); border-radius: 50%; background: rgba(6, 12, 29, .78); color: var(--cyan); font-size: 22px; cursor: pointer; backdrop-filter: blur(8px); transition: opacity .25s ease, transform .15s ease; }
 .screen-play[hidden] { display: none; }
 .screen-play.playing { opacity: 0; pointer-events: none; }
+.screen-play:hover { transform: translate(-50%, -50%) scale(1.1); }
 
 .resize-handle { position: absolute; z-index: 3; right: 0; bottom: 0; display: grid; width: 37px; height: 37px; place-items: center; border-radius: 12px 0 13px 0; background: rgba(69, 221, 255, .86); color: #081323; font-size: 19px; font-weight: 900; cursor: nwse-resize; }
 .screen-depth { position: absolute; z-index: 3; bottom: 7px; left: 10px; padding: 3px 5px; border-radius: 4px; background: rgba(2,8,19,.7); color: #82def5; font-size: 8px; font-weight: 800; letter-spacing: .1em; }
 
-/* Menu VR (z-index 8) : derrière les mains, mais hit-test au pixel près */
-.vr-menu { position: fixed; z-index: 8; display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid rgba(124, 228, 255, .7); border-radius: 14px; background: rgba(6, 12, 29, .86); backdrop-filter: blur(14px); box-shadow: 0 12px 36px rgba(0, 0, 0, .5), 0 0 22px rgba(69, 221, 255, .18); will-change: left, top; }
-.vr-menu[hidden] { display: none; }
-.vr-menu button { min-height: 40px; padding: 0 16px; border: 1px solid rgba(129, 225, 255, .8); border-radius: 9px; background: rgba(10, 29, 52, .94); color: white; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; text-align: left; }
-.vr-menu button:active { background: rgba(69, 221, 255, .35); }
+/* Taskbar VR : barre horizontale fine, boutons ronds */
+.vr-taskbar { position: fixed; z-index: 8; display: flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid rgba(124, 228, 255, .7); border-radius: 999px; background: rgba(6, 12, 29, .82); backdrop-filter: blur(14px); box-shadow: 0 12px 36px rgba(0, 0, 0, .5), 0 0 22px rgba(69, 221, 255, .18); will-change: left, top; }
+.vr-taskbar[hidden] { display: none; }
+.vr-btn { width: 44px; height: 44px; padding: 0; border-radius: 50%; border: 1px solid rgba(129, 225, 255, .8); background: rgba(10, 29, 52, .94); color: white; font-size: 18px; font-weight: 700; cursor: pointer; display: grid; place-items: center; transition: background .15s, transform .12s, box-shadow .15s; }
+.vr-btn.hovered { background: rgba(69, 221, 255, .45); box-shadow: 0 0 16px rgba(69, 221, 255, .8); transform: scale(1.12); }
+.vr-btn.pressed { background: rgba(69, 221, 255, .9); color: #061424; transform: scale(.92); }
+.vr-btn.active { background: rgba(130, 40, 150, .97); box-shadow: 0 0 19px rgba(220, 130, 255, .45); }
 
-/* Curseur de main (z-index 12 : au-dessus de la main et du menu) */
-.hand-cursor { --depth: .5; position: fixed; z-index: 12; width: 20px; height: 20px; margin: -10px 0 0 -10px; border: 2px solid var(--cyan); border-radius: 50%; box-shadow: 0 0 calc(10px + var(--depth) * 16px) rgba(69, 221, 255, .85); opacity: 0; pointer-events: none; transform: scale(calc(.72 + var(--depth) * .6)); transition: opacity .18s ease, background .1s ease, transform .1s ease; }
+/* Curseur de main */
+.hand-cursor { --depth: .5; position: fixed; z-index: 60; width: 16px; height: 16px; margin: -8px 0 0 -8px; border: 2px solid var(--cyan); border-radius: 50%; box-shadow: 0 0 calc(10px + var(--depth) * 16px) rgba(69, 221, 255, .85); opacity: 0; pointer-events: none; transform: scale(calc(.72 + var(--depth) * .6)); transition: opacity .18s ease, background .1s ease, transform .1s ease; }
 .hand-cursor.visible { opacity: 1; }
 .hand-cursor.pinching { background: var(--cyan); transform: scale(calc(.5 + var(--depth) * .4)); }
 
-/* UI téléphone (z-index 15 : au-dessus de tout, mais masquée en VR) */
-.hint { position: fixed; z-index: 15; left: 50%; bottom: max(86px, calc(env(safe-area-inset-bottom) + 65px)); width: min(630px, calc(100vw - 32px)); margin: 0; transform: translateX(-50%); padding: 10px 15px; border: 1px solid rgba(255, 255, 255, .13); border-radius: 999px; background: rgba(7, 12, 27, .7); color: #d2dceb; font-size: 12px; text-align: center; backdrop-filter: blur(10px); transition: opacity .25s ease; }
+/* UI téléphone */
+.hint { position: fixed; z-index: 70; left: 50%; bottom: max(86px, calc(env(safe-area-inset-bottom) + 65px)); width: min(630px, calc(100vw - 32px)); margin: 0; transform: translateX(-50%); padding: 10px 15px; border: 1px solid rgba(255, 255, 255, .13); border-radius: 999px; background: rgba(7, 12, 27, .7); color: #d2dceb; font-size: 12px; text-align: center; backdrop-filter: blur(10px); transition: opacity .25s ease; }
 
-.action-bar { position: fixed; z-index: 15; right: max(18px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; transition: opacity .25s ease, visibility .25s ease; }
+.action-bar { position: fixed; z-index: 70; right: max(18px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; transition: opacity .25s ease, visibility .25s ease; }
 .camera-button, .motion-button, .scan-button, .upload-button, .vr-button { min-height: 42px; padding: 0 14px; border: 1px solid rgba(129, 225, 255, .8); border-radius: 11px; background: rgba(10, 29, 52, .92); color: white; font-size: 13px; font-weight: 750; cursor: pointer; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
 .motion-button { border-color: rgba(110, 241, 188, .85); background: rgba(11, 74, 65, .94); }
 .motion-button.active { background: rgba(17, 113, 93, .96); box-shadow: 0 0 18px rgba(87, 241, 184, .38); }
@@ -71,7 +73,6 @@ button { font-family: inherit; }
 .vr-button.active { background: rgba(130, 40, 150, .97); box-shadow: 0 0 19px rgba(220, 130, 255, .45); }
 .camera-button:disabled, .motion-button:disabled, .scan-button:disabled, .upload-button:disabled, .vr-button:disabled { opacity: .5; cursor: default; }
 
-/* Mode VR : UI téléphone masquée */
 body.vr-mode .action-bar,
 body.vr-mode .hint,
 body.vr-mode .scan-hud { opacity: 0; pointer-events: none; visibility: hidden; }
@@ -80,9 +81,8 @@ body.vr-mode .controls { opacity: .35; }
 @media (max-width: 600px) {
   .controls { padding: 13px 14px; } h1 { font-size: 19px; }
   .scan-hud { top: max(16px, env(safe-area-inset-top)); right: 14px; font-size: 8px; }
-  .ar-screen { width: 78vw; height: 51vw; }
   .hint { bottom: max(135px, calc(env(safe-area-inset-bottom) + 110px)); font-size: 11px; }
   .action-bar { right: 14px; bottom: max(14px, env(safe-area-inset-bottom)); left: 14px; gap: 4px; }
   .camera-button, .motion-button, .scan-button, .upload-button, .vr-button { flex: 1; min-height: 40px; padding: 0 3px; font-size: 9px; }
-  .vr-menu button { min-height: 36px; padding: 0 12px; font-size: 11px; }
+  .vr-btn { width: 40px; height: 40px; font-size: 16px; }
 }
