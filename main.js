@@ -1,22 +1,5 @@
 /* global Hands, Camera, drawConnectors, drawLandmarks, HAND_CONNECTIONS */
 
-/*
- * mvmobile test — couche « spatiale » inspirée d'un casque Quest 3, mais en Web.
- *
- * Ce qui est réellement possible sans WebXR 6DoF sur iPhone :
- *   · passthrough arrière non miroir (corrigé) ;
- *   · ancrage du panneau par orientation (cap + inclinaison), avec lissage
- *     type « late-latched » : l'image et l'écran bougent ensemble ;
- *   · recalage automatique quand le panneau sort du champ ;
- *   · fenêtre 3D : parallaxe, inclinaison, ombre de contact, profondeur ;
- *   · mains 3D : points projetés avec leur profondeur MediaPipe (z), pincement
- *     à hystérésis, suivis de doigts, pointeur stabilisé.
- *
- * Ce qui n'est pas possible dans un navigateur mobile : occlusion réelle par
- * la géométrie de la pièce, ancrage au monde sans dérive (pas de VIO), vrai
- * rendu stéréo. Le code est structuré pour brancher WebXR plus tard.
- */
-
 (() => {
   'use strict';
 
@@ -44,14 +27,16 @@
   const anchorLabel = $('#anchor-label');
   const cursor = $('#hand-cursor');
   const scanButton = $('#scan-button');
+  const vrButton = $('#vr-button');
+  const vrMenu = $('#vr-menu');
+
   const debugMode = /[?&]debug\b/.test(location.search);
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const minSize = { width: 220, height: 160 };
-  const SMOOTHING = reduceMotion ? 1 : 0.24;      // 1 = pas de lissage
-  const ORIENTATION_GAIN = 11;                     // px par degré (cap)
-  const PITCH_GAIN = 9;                            // px par degré (tangage)
-  const RESEAT_MARGIN = 26;                        // px encore visibles avant recalage
+  const SMOOTHING = reduceMotion ? 1 : 0.24;
+  const ORIENTATION_GAIN = 11;   // px par degré en cap
+  const PITCH_GAIN = 9;          // px par degré en tangage
 
   let objectUrl = null;
   let screenState = { x: 0, y: 0, width: 0, height: 0 };
@@ -60,8 +45,20 @@
   let twoHandResize = null;
   let motionEnabled = false;
   let latestOrientation = null;
-  let orientationAnchor = null;
   let smoothedOrientation = null;
+
+  // Ancres séparées : écran et menu chacun dans l'espace monde
+  let screenAnchor = null;   // { heading, pitch, x, y }
+  let menuAnchor = null;     // { heading, pitch, x, y }
+
+  let rawHeading = null;
+  let accumulatedHeading = 0;
+
+  let vrMode = false;
+  let vrMenuTarget = { x: 0, y: 0 };
+  let vrMenuState = { x: 0, y: 0 };
+  let menuClickLatch = false;
+
   let scanActive = false;
   let scanAnimation = 0;
   let previousLuma = null;
@@ -88,13 +85,9 @@
     status.textContent = message;
     statusDot.className = `status-dot ${mode}`;
   }
-
   function setHint(message) { hint.textContent = message; }
-
   function clamp(value, low, high) { return Math.min(Math.max(value, low), high); }
-
   function lerp(from, to, amount) { return from + (to - from) * amount; }
-
   function angleDelta(from, to) { return ((to - from + 540) % 360) - 180; }
 
   function lowPass(previous, next, amount) {
@@ -107,7 +100,7 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* Fenêtre spatiale : état cible + état rendu lissé                    */
+  /* Fenêtre spatiale                                                    */
   /* ------------------------------------------------------------------ */
 
   function initialiseScreen() {
@@ -116,7 +109,7 @@
     targetState = { x: (innerWidth - width) / 2, y: (innerHeight - height) / 2, width, height };
     screenState = { ...targetState };
     applyScreen(true);
-    placeOrientationAnchor();
+    placeScreenAnchor();
   }
 
   function showScreen() {
@@ -127,41 +120,15 @@
   }
 
   function clampTarget(allowOffscreen) {
-    const margin = allowOffscreen ? 56 : 0;
-    const minX = allowOffscreen ? -targetState.width + margin : 0;
-    const minY = allowOffscreen ? -targetState.height + margin : 0;
-    const maxX = allowOffscreen ? innerWidth - margin : Math.max(0, innerWidth - targetState.width);
-    const maxY = allowOffscreen ? innerHeight - margin : Math.max(0, innerHeight - targetState.height);
-    targetState.x = clamp(targetState.x, minX, maxX);
-    targetState.y = clamp(targetState.y, minY, maxY);
-  }
-
-  function visibleRatio(state) {
-    const visibleWidth = Math.max(0, Math.min(state.x + state.width, innerWidth) - Math.max(state.x, 0));
-    const visibleHeight = Math.max(0, Math.min(state.y + state.height, innerHeight) - Math.max(state.y, 0));
-    return (visibleWidth * visibleHeight) / Math.max(1, state.width * state.height);
-  }
-
-  // Le panneau reste « accroché au décor » tant qu'il est assez visible ;
-  // sinon il se recale à l'écran : c'est le compromis honnête d'un ancrage
-  // sans position 3D (contrairement à un casque qui garde l'ancre au monde).
-  function reseatIfLost() {
-    if (!orientationAnchor || interaction || twoHandResize || screen.hidden) return;
-    if (visibleRatio(targetState) >= 0.34) return;
-    orientationAnchor = null;
-    const width = targetState.width;
-    const height = targetState.height;
-    targetState = {
-      x: clamp(targetState.x, RESEAT_MARGIN, Math.max(RESEAT_MARGIN, innerWidth - width - RESEAT_MARGIN)),
-      y: clamp(targetState.y, RESEAT_MARGIN, Math.max(RESEAT_MARGIN, innerHeight - height - RESEAT_MARGIN)),
-      width,
-      height
-    };
-    anchorLabel.textContent = 'RECALÉ À L’ÉCRAN';
+    if (allowOffscreen) return; // ancre monde : pas de borne
+    const maxX = Math.max(0, innerWidth - targetState.width);
+    const maxY = Math.max(0, innerHeight - targetState.height);
+    targetState.x = clamp(targetState.x, 0, maxX);
+    targetState.y = clamp(targetState.y, 0, maxY);
   }
 
   function applyScreen(snap = false) {
-    const allowOffscreen = Boolean(orientationAnchor) && !interaction && !twoHandResize;
+    const allowOffscreen = Boolean(screenAnchor) && !interaction && !twoHandResize;
     clampTarget(allowOffscreen);
     const amount = snap ? 1 : SMOOTHING;
     screenState.x = lerp(screenState.x, targetState.x, amount);
@@ -175,18 +142,17 @@
     updateSpatialPose();
   }
 
-  // Parallaxe : l'écran s'incline légèrement du côté opposé au mouvement du
-  // téléphone, et prend une ombre plus longue quand on s'en éloigne en cap.
   function updateSpatialPose() {
     const orientation = smoothedOrientation || latestOrientation;
-    if (!orientation || !orientationAnchor) {
+    if (!orientation || !screenAnchor) {
       screen.style.setProperty('--yaw', '-3deg');
       screen.style.setProperty('--pitch', '1deg');
       screen.style.setProperty('--lift', '0px');
       return;
     }
-    const yawOffset = angleDelta(orientation.heading, orientationAnchor.heading);
-    const pitchOffset = orientation.pitch - orientationAnchor.pitch;
+    const anchorHeadingNorm = ((screenAnchor.heading % 360) + 360) % 360;
+    const yawOffset = angleDelta(orientation.heading, anchorHeadingNorm);
+    const pitchOffset = orientation.pitch - screenAnchor.pitch;
     const yaw = clamp(-yawOffset * 0.16, -11, 11) - 2;
     const pitch = clamp(pitchOffset * 0.14, -8, 8) + 1;
     const lift = clamp(Math.abs(yawOffset) * 0.5, 0, 26);
@@ -198,24 +164,22 @@
   function bounds() {
     return { left: screenState.x, top: screenState.y, right: screenState.x + screenState.width, bottom: screenState.y + screenState.height };
   }
-
   function pointInScreen(point) {
     const box = bounds();
     return point.x >= box.left && point.x <= box.right && point.y >= box.top && point.y <= box.bottom;
   }
-
   function pointOnResizeHandle(point) {
     const box = bounds();
     return point.x >= box.right - 58 && point.x <= box.right + 12 && point.y >= box.bottom - 58 && point.y <= box.bottom + 12;
   }
 
   /* ------------------------------------------------------------------ */
-  /* Manipulation (main, souris, tactile)                                */
+  /* Manipulation écran                                                  */
   /* ------------------------------------------------------------------ */
 
   function beginInteraction(point, mode, source) {
     if (screen.hidden) return false;
-    orientationAnchor = null;
+    screenAnchor = null;
     anchorLabel.textContent = 'MANIPULATION';
     if (mode === 'resize') {
       interaction = { mode, source, startX: point.x, startY: point.y, width: targetState.width, height: targetState.height };
@@ -244,15 +208,17 @@
     if (!interaction || interaction.source !== source) return;
     interaction = null;
     screen.classList.remove('grabbed');
-    placeOrientationAnchor();
-    setHint('Écran posé. Pincez la barre pour le déplacer, ou le coin pour le redimensionner.');
+    placeScreenAnchor();
+    setHint(vrMode
+      ? 'Écran posé. Pincez la barre pour le déplacer.'
+      : 'Écran posé. Pincez la barre pour le déplacer, ou le coin pour le redimensionner.');
   }
 
   function resizeFromTwoHands(first, second) {
     const distance = Math.hypot(first.x - second.x, first.y - second.y);
     if (!twoHandResize) {
       if (screen.hidden || !pointInScreen(first)) return;
-      orientationAnchor = null;
+      screenAnchor = null;
       anchorLabel.textContent = 'REDIMENSIONNEMENT';
       twoHandResize = { distance: Math.max(distance, 1), width: targetState.width, height: targetState.height };
       screen.classList.add('grabbed');
@@ -269,8 +235,8 @@
     if (!twoHandResize) return;
     twoHandResize = null;
     screen.classList.remove('grabbed');
-    placeOrientationAnchor();
-    setHint('Écran redimensionné. Un pincement sur la barre permet de le déplacer.');
+    placeScreenAnchor();
+    setHint('Écran redimensionné.');
   }
 
   /* ------------------------------------------------------------------ */
@@ -295,7 +261,6 @@
     event.target.value = '';
   }
 
-  // Souris et tactile : alternative pratique pour tester sans caméra.
   function pointerPosition(event) { return { x: event.clientX, y: event.clientY }; }
   function startPointerMove(event) { event.preventDefault(); beginInteraction(pointerPosition(event), 'move', 'pointer'); screen.setPointerCapture(event.pointerId); }
   function startPointerResize(event) { event.preventDefault(); event.stopPropagation(); beginInteraction(pointerPosition(event), 'resize', 'pointer'); screen.setPointerCapture(event.pointerId); }
@@ -303,26 +268,21 @@
   function endPointer() { endInteraction('pointer'); }
 
   /* ------------------------------------------------------------------ */
-  /* Mains : profondeur relative, pincement à hystérésis, pointeur lissé */
+  /* Mains                                                               */
   /* ------------------------------------------------------------------ */
 
   function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0)); }
   function fingerExtended(landmarks, tip, pip) { return distance(landmarks[tip], landmarks[0]) > distance(landmarks[pip], landmarks[0]) * 1.16; }
 
   function handData(landmarks, index) {
-    // MediaPipe renvoie des coordonnées normalisées et un z relatif : le z sert
-    // ici à moduler la taille du curseur (effet de profondeur), pas à mesurer.
     const raw = { x: landmarks[8].x * innerWidth, y: landmarks[8].y * innerHeight };
     const pinchDistance = distance(landmarks[4], landmarks[8]);
-    // Hystérésis : on pince sous 0.050 et on relâche au-dessus de 0.070, ce qui
-    // évite le clignotement du geste quand la main tremble.
     if (pinchDistance < 0.05) pinchHeld = true;
     else if (pinchDistance > 0.07) pinchHeld = false;
     return {
       index,
       raw,
       point: raw,
-      // z MediaPipe : plus la valeur est négative, plus la main est proche.
       depth: clamp(0.5 - (landmarks[8].z || 0) * 2.5, 0, 1),
       pinch: pinchHeld,
       pinchDistance,
@@ -334,7 +294,6 @@
   function smoothCursor(raw) {
     if (!smoothPoint || !smoothCursor.last) { smoothPoint = { ...raw }; }
     else {
-      // Filtre exponentiel : fluide sans traîner quand on bouge vite.
       const amount = reduceMotion ? 1 : 0.42;
       smoothPoint = { x: lerp(smoothPoint.x, raw.x, amount), y: lerp(smoothPoint.y, raw.y, amount) };
     }
@@ -350,10 +309,6 @@
     cursor.classList.toggle('pinching', pinching);
   }
 
-  // Rendu « verre » de la main : les points proches (z négatif chez MediaPipe)
-  // sont plus gros, plus lumineux et plus opaques, ce qui donne une vraie
-  // sensation de volume devant le passthrough, comme le tracking de main d'un
-  // casque — en projection, faute de rendu stéréo.
   function drawHandSkeleton(landmarks) {
     const width = handCanvas.width;
     const height = handCanvas.height;
@@ -395,8 +350,7 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* Scan de la pièce (profondeur relative) — inchangé sur le fond,      */
-  /* mais rendu plus fin et stabilisé temporellement.                    */
+  /* Scan pièce                                                          */
   /* ------------------------------------------------------------------ */
 
   function analyseRelativeDepth() {
@@ -408,7 +362,6 @@
     for (let index = 0, pixel = 0; index < luma.length; index += 1, pixel += 4) {
       luma[index] = pixels[pixel] * 0.2126 + pixels[pixel + 1] * 0.7152 + pixels[pixel + 2] * 0.0722;
     }
-
     const vertices = [];
     for (let y = step; y < height - step; y += step) {
       for (let x = step; x < width - step; x += step) {
@@ -418,7 +371,6 @@
         const structure = clamp((horizontal + vertical) / 150, 0, 1);
         const temporal = previousLuma ? clamp(Math.abs(luma[index] - previousLuma[index]) / 46, 0, 1) : 0;
         const floorPerspective = y / (height - 1);
-        // « near » est une confiance visuelle de proximité, jamais une mesure en mètres.
         const near = clamp(0.12 + structure * 0.31 + temporal * 0.20 + floorPerspective * 0.37, 0, 1);
         vertices.push({ x: (x / width) * innerWidth, y: (y / height) * innerHeight, near, light: luma[index] / 255 });
       }
@@ -435,8 +387,11 @@
     if (!depthVertices.length) return;
     const columns = Math.floor((scanGrid.width - scanGrid.step * 2 - 1) / scanGrid.step) + 1;
     const orientation = smoothedOrientation || latestOrientation;
-    const headingDrift = orientationAnchor && orientation ? angleDelta(orientation.heading, orientationAnchor.heading) * 1.8 : 0;
-
+    let headingDrift = 0;
+    if (screenAnchor && orientation) {
+      const anchorHeadingNorm = ((screenAnchor.heading % 360) + 360) % 360;
+      headingDrift = angleDelta(orientation.heading, anchorHeadingNorm) * 1.8;
+    }
     scanContext.lineWidth = 0.65;
     for (let index = 0; index < depthVertices.length; index += 1) {
       const vertex = depthVertices[index];
@@ -478,7 +433,7 @@
       previousLuma = null;
       lastScanAt = 0;
       setStatus('Scan 3D relatif actif', 'active');
-      setHint('Déplacez lentement la caméra : le nuage montre les structures et la profondeur relative, pas des mètres exacts.');
+      setHint('Déplacez lentement la caméra : le nuage montre les structures et la profondeur relative.');
       scanAnimation = requestAnimationFrame(runScanLoop);
     } else {
       cancelAnimationFrame(scanAnimation);
@@ -486,6 +441,90 @@
       depthVertices = [];
       scanContext.clearRect(0, 0, scanCanvas.width, scanCanvas.height);
       setStatus('Scan 3D relatif arrêté', 'ready');
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Menu VR : position, hit-test, actions                               */
+  /* ------------------------------------------------------------------ */
+
+  function applyVrMenuPosition(snap = false) {
+    if (vrMenu.hidden) return;
+    const amount = snap ? 1 : SMOOTHING;
+    vrMenuState.x = lerp(vrMenuState.x, vrMenuTarget.x, amount);
+    vrMenuState.y = lerp(vrMenuState.y, vrMenuTarget.y, amount);
+    vrMenu.style.left = `${vrMenuState.x.toFixed(1)}px`;
+    vrMenu.style.top = `${vrMenuState.y.toFixed(1)}px`;
+  }
+
+  function placeMenuAnchor() {
+    if (!motionEnabled || !latestOrientation || vrMenu.hidden) { menuAnchor = null; return; }
+    menuAnchor = {
+      heading: accumulatedHeading,
+      pitch: smoothedOrientation ? smoothedOrientation.pitch : latestOrientation.pitch,
+      x: vrMenuTarget.x,
+      y: vrMenuTarget.y
+    };
+  }
+
+  function pointOnVrMenu(point) {
+    if (vrMenu.hidden) return null;
+    const rect = vrMenu.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    if (point.x < rect.left || point.x > rect.right || point.y < rect.top || point.y > rect.bottom) return null;
+    for (const btn of vrMenu.querySelectorAll('button')) {
+      const br = btn.getBoundingClientRect();
+      if (point.x >= br.left && point.x <= br.right && point.y >= br.top && point.y <= br.bottom) return btn;
+    }
+    return null;
+  }
+
+  function handleVrMenuAction(action) {
+    switch (action) {
+      case 'reanchor':
+        placeScreenAnchor();
+        placeMenuAnchor();
+        setStatus('Ancres replacées', 'active');
+        setHint('Écran et menu sont réancrés au cap actuel.');
+        break;
+      case 'close-screen':
+        if (!screen.hidden) {
+          screen.hidden = true;
+          uploadedVideo.pause();
+        }
+        if (vrMode) toggleVRMode();
+        setStatus('Écran fermé', 'ready');
+        break;
+      case 'exit':
+        if (vrMode) toggleVRMode();
+        break;
+    }
+  }
+
+  function toggleVRMode() {
+    vrMode = !vrMode;
+    document.body.classList.toggle('vr-mode', vrMode);
+    vrButton.classList.toggle('active', vrMode);
+
+    if (vrMode) {
+      vrMenuTarget = {
+        x: Math.max(14, innerWidth - 200),
+        y: Math.max(90, innerHeight * 0.16)
+      };
+      vrMenuState = { ...vrMenuTarget };
+      vrMenu.hidden = false;
+      applyVrMenuPosition(true);
+      placeMenuAnchor();
+      if (!screen.hidden) placeScreenAnchor();
+      setStatus('Mode VR — visez et pincez pour cliquer', 'active');
+      setHint('Pincez index + pouce sur un bouton du menu pour cliquer · Pincez la barre de l’écran pour le déplacer.');
+    } else {
+      vrMenu.hidden = true;
+      menuAnchor = null;
+      menuClickLatch = false;
+      setStatus('Mode VR désactivé', 'ready');
+      setHint('Écran posé. Pincez la barre pour le déplacer, ou le coin pour le redimensionner.');
+      if (!screen.hidden) placeScreenAnchor();
     }
   }
 
@@ -505,11 +544,11 @@
 
     if (!landmarksList.length) {
       if (!handLostSince) handLostSince = now;
-      // Anti-scintillement : on garde le geste 120 ms avant de conclure à une perte.
       if (now - handLostSince > 120) {
         cursor.classList.remove('visible');
         smoothCursor.last = null;
         pinchHeld = false;
+        menuClickLatch = false;
         if (interaction) endInteraction('hand');
         endTwoHandResize();
         lastHands = [];
@@ -520,8 +559,6 @@
     handLostSince = 0;
 
     lastHands = landmarksList.map((landmarks, index) => handData(landmarks, index));
-    // Les points de l'index de chaque main sont accumulés pour le rendu
-    // « verre » du curseur, dessiné sur le calque caméra (z-index 6).
     handContext.setTransform(1, 0, 0, 1, 0, 0);
     lastHands.forEach(hand => drawHandSkeleton(hand.landmarks));
 
@@ -539,25 +576,37 @@
     endTwoHandResize();
 
     if (primary.pinch) {
-      if (!interaction) {
-        if (pointOnResizeHandle(point)) beginInteraction(point, 'resize', 'hand');
-        else if (pointInScreen(point)) beginInteraction(point, 'move', 'hand');
+      if (!interaction && !menuClickLatch) {
+        const menuBtn = pointOnVrMenu(point);
+        if (menuBtn) {
+          menuClickLatch = true;
+          handleVrMenuAction(menuBtn.dataset.vrAction);
+        } else if (pointOnResizeHandle(point)) {
+          beginInteraction(point, 'resize', 'hand');
+        } else if (pointInScreen(point)) {
+          beginInteraction(point, 'move', 'hand');
+        }
       }
       updateInteraction(point, 'hand');
     } else {
+      menuClickLatch = false;
       if (interaction) endInteraction('hand');
-      if (primary.indexOpen) setStatus('Index détecté — pincez l’écran pour le saisir', 'active');
-      else setStatus(`Main détectée${fps ? ` · ${Math.round(fps)} i/s` : ''}`, 'active');
+      if (vrMode) {
+        const menuBtn = pointOnVrMenu(point);
+        setStatus(menuBtn ? `Prêt : ${menuBtn.textContent.trim()}` : 'Mode VR — pincez pour cliquer', 'active');
+      } else if (primary.indexOpen) {
+        setStatus('Index détecté — pincez l’écran pour le saisir', 'active');
+      } else {
+        setStatus(`Main détectée${fps ? ` · ${Math.round(fps)} i/s` : ''}`, 'active');
+      }
     }
   }
 
   /* ------------------------------------------------------------------ */
-  /* Caméra arrière (correction du bug caméra avant)                     */
+  /* Caméra arrière                                                      */
   /* ------------------------------------------------------------------ */
 
-  function stopStream(stream) {
-    stream?.getTracks().forEach(track => track.stop());
-  }
+  function stopStream(stream) { stream?.getTracks().forEach(track => track.stop()); }
 
   const FRONT_PATTERN = /front|facetime|selfie|\buser\b|avant/i;
   const REAR_PATTERN = /back|rear|environment|arri[eè]re|ultra ?wide|telephoto|t[eé]l[eé]objectif|grand angle/i;
@@ -573,7 +622,6 @@
     if (FRONT_PATTERN.test(label)) return 'user';
     return 'unknown';
   }
-
   function streamIsFrontCamera(stream) { return streamFacing(stream) === 'user'; }
 
   async function rearDevices() {
@@ -583,20 +631,14 @@
     if (named.length) return named;
     return inputs.filter(device => !FRONT_PATTERN.test(device.label));
   }
-
   function openDevice(deviceId, base) {
     return navigator.mediaDevices.getUserMedia({ video: { ...base, deviceId: { exact: deviceId } }, audio: false });
   }
-
   async function requestNamedRearCamera(base) {
     const candidates = await rearDevices();
     for (const device of candidates) {
       let stream = null;
-      try {
-        stream = await openDevice(device.deviceId, base);
-      } catch (error) {
-        continue;
-      }
+      try { stream = await openDevice(device.deviceId, base); } catch (error) { continue; }
       if (!streamIsFrontCamera(stream)) {
         cameraVideo.dataset.deviceId = device.deviceId || '';
         return stream;
@@ -605,7 +647,6 @@
     }
     throw new Error('rear-camera-unavailable');
   }
-
   async function requestRearCamera() {
     const base = { width: { ideal: 1280 }, height: { ideal: 720 } };
     if (cameraVideo.dataset.deviceId) {
@@ -613,7 +654,7 @@
         const stream = await openDevice(cameraVideo.dataset.deviceId, base);
         if (!streamIsFrontCamera(stream)) return stream;
         stopStream(stream);
-      } catch (error) { /* périphérique disparu : on continue */ }
+      } catch (error) {}
       cameraVideo.dataset.deviceId = '';
     }
     try {
@@ -630,7 +671,6 @@
     if (!navigator.mediaDevices?.getUserMedia) { setStatus('Caméra indisponible dans ce navigateur', ''); return; }
     cameraButton.disabled = true;
     cameraButton.textContent = 'Connexion…';
-    // Les libellés de périphériques ne sont lisibles qu'après une autorisation.
     try {
       const warmup = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
       stopStream(warmup);
@@ -649,21 +689,20 @@
       await cameraVideo.play();
       const facing = streamFacing(stream);
       const openedTrack = stream.getVideoTracks()[0];
-      console.info('[mvmobile] caméra ouverte :', facing, '|', openedTrack?.label, '|', JSON.stringify(openedTrack?.getSettings?.() || {}));
+      console.info('[mvmobile] caméra ouverte :', facing, '|', openedTrack?.label);
       cameraButton.textContent = 'Caméra active';
       motionButton.disabled = false;
       scanButton.disabled = false;
       uploadButton.disabled = false;
+      vrButton.disabled = false;
       setStatus(facing === 'environment' ? 'Caméra arrière active — importez une vidéo' : 'Caméra active — importez une vidéo', 'active');
-      setHint(debugMode
-        ? `Caméra : ${openedTrack?.label || 'sans nom'} (${facing === 'environment' ? 'arrière' : facing === 'user' ? 'avant' : 'indéterminée'})`
-        : 'Ajoutez une vidéo. La main et son curseur passent devant l’écran virtuel.');
+      setHint('Ajoutez une vidéo. La main et son curseur passent devant l’écran virtuel.');
       startHandTracking();
     } catch (error) {
       cameraButton.disabled = false;
       cameraButton.textContent = 'Réessayer la caméra';
-      setStatus(error.message === 'rear-camera-unavailable' ? 'Caméra arrière introuvable' : 'Autorisation caméra refusée ou indisponible', '');
-      setHint('La caméra arrière nécessite HTTPS (ou localhost) et votre autorisation. Sur iPhone, ouvrez la page dans Safari.');
+      setStatus(error.message === 'rear-camera-unavailable' ? 'Caméra arrière introuvable' : 'Caméra indisponible', '');
+      setHint('La caméra arrière nécessite HTTPS (ou localhost) et votre autorisation.');
     }
   }
 
@@ -677,7 +716,7 @@
     handsInstance.onResults(onResults);
     const loop = async () => {
       if (cameraVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-        try { await handsInstance.send({ image: cameraVideo }); } catch (error) { /* frame ignorée */ }
+        try { await handsInstance.send({ image: cameraVideo }); } catch (error) {}
       }
       trackingLoop = requestAnimationFrame(loop);
     };
@@ -685,14 +724,14 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* Orientation : ancrage au cap, lissé, avec parallaxe                  */
+  /* Orientation : ancrage monde, heading accumulé                       */
   /* ------------------------------------------------------------------ */
 
-  function placeOrientationAnchor() {
+  function placeScreenAnchor() {
     if (!motionEnabled || !latestOrientation || screen.hidden) return;
-    orientationAnchor = {
-      heading: latestOrientation.heading,
-      pitch: latestOrientation.pitch,
+    screenAnchor = {
+      heading: accumulatedHeading,
+      pitch: smoothedOrientation ? smoothedOrientation.pitch : latestOrientation.pitch,
       x: targetState.x,
       y: targetState.y
     };
@@ -700,14 +739,21 @@
   }
 
   function updateOrientationAnchor() {
-    if (!orientationAnchor || !smoothedOrientation || interaction || twoHandResize || screen.hidden) return;
-    // Le panneau se déplace dans le sens opposé au téléphone : quand vous revenez
-    // au même cap, il revient au même point du décor caméra.
-    const horizontal = angleDelta(smoothedOrientation.heading, orientationAnchor.heading);
-    const vertical = orientationAnchor.pitch - smoothedOrientation.pitch;
-    targetState.x = orientationAnchor.x + horizontal * ORIENTATION_GAIN;
-    targetState.y = orientationAnchor.y + vertical * PITCH_GAIN;
-    reseatIfLost();
+    if (!smoothedOrientation) return;
+    if (screenAnchor && !interaction && !twoHandResize && !screen.hidden) {
+      const horizontal = accumulatedHeading - screenAnchor.heading;
+      // pitch : inclinaison téléphone vers le haut -> beta augmente
+      // -> scène descend dans le cadre -> targetState.y augmente
+      const vertical = smoothedOrientation.pitch - screenAnchor.pitch;
+      targetState.x = screenAnchor.x + horizontal * ORIENTATION_GAIN;
+      targetState.y = screenAnchor.y + vertical * PITCH_GAIN;
+    }
+    if (vrMode && menuAnchor && !vrMenu.hidden) {
+      const horizontal = accumulatedHeading - menuAnchor.heading;
+      const vertical = smoothedOrientation.pitch - menuAnchor.pitch;
+      vrMenuTarget.x = menuAnchor.x + horizontal * ORIENTATION_GAIN;
+      vrMenuTarget.y = menuAnchor.y + vertical * PITCH_GAIN;
+    }
   }
 
   async function enableMotionAnchor() {
@@ -725,7 +771,8 @@
       motionButton.textContent = '⌖ Réancrer';
       setStatus('Ancrage d’orientation actif', 'active');
       setHint('Visez l’endroit choisi, puis touchez « Réancrer ». L’écran suivra votre rotation et reviendra au même cap.');
-      placeOrientationAnchor();
+      placeScreenAnchor();
+      if (vrMode) placeMenuAnchor();
     } catch (error) {
       setStatus('Mouvement non autorisé', '');
       setHint('Sur iPhone, acceptez l’accès aux mouvements pour activer l’ancrage d’orientation.');
@@ -735,24 +782,28 @@
   function onDeviceOrientation(event) {
     const heading = Number.isFinite(event.webkitCompassHeading) ? event.webkitCompassHeading : event.alpha;
     if (!Number.isFinite(heading) || !Number.isFinite(event.beta)) return;
+
+    // Heading accumulé : supporte les rotations > 180° sans saut
+    if (rawHeading === null) accumulatedHeading = heading;
+    else accumulatedHeading += angleDelta(rawHeading, heading);
+    rawHeading = heading;
+
     latestOrientation = {
       heading: (heading + 360) % 360,
       pitch: event.beta,
       roll: event.gamma || 0
     };
-    // Lissage : supprime le tremblement du gyroscope sans retard perceptible.
     smoothedOrientation = lowPass(smoothedOrientation, latestOrientation, reduceMotion ? 1 : 0.3);
     updateOrientationAnchor();
   }
 
   /* ------------------------------------------------------------------ */
-  /* Boucle de rendu : un seul rAF pour toutes les interpolations        */
+  /* Boucle de rendu                                                     */
   /* ------------------------------------------------------------------ */
 
   function renderLoop() {
-    if (!screen.hidden) {
-      applyScreen();
-    }
+    if (!screen.hidden) applyScreen();
+    if (vrMode && !vrMenu.hidden) applyVrMenuPosition();
     requestAnimationFrame(renderLoop);
   }
 
@@ -775,15 +826,30 @@
 
   if (debugMode) {
     setStatus('Mode diagnostic : activez la caméra', 'ready');
-    setHint('Mode debug actif : le nom du périphérique s’affichera après activation.');
+    setHint('Mode debug actif.');
   }
 
   cameraButton.addEventListener('click', startCamera);
   motionButton.addEventListener('click', enableMotionAnchor);
   scanButton.addEventListener('click', toggleRoomScan);
   uploadButton.addEventListener('click', openFilePicker);
+  vrButton.addEventListener('click', toggleVRMode);
   fileInput.addEventListener('change', loadVideo);
-  closeScreen.addEventListener('click', () => { screen.hidden = true; uploadedVideo.pause(); setStatus('Écran vidéo fermé', 'ready'); });
+  closeScreen.addEventListener('click', () => {
+    screen.hidden = true;
+    uploadedVideo.pause();
+    if (vrMode) toggleVRMode();
+    setStatus('Écran vidéo fermé', 'ready');
+  });
+
+  // Fallback tactile sur le menu VR (utile si le tracking main échoue)
+  vrMenu.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!vrMode) return;
+      handleVrMenuAction(btn.dataset.vrAction);
+    });
+  });
+
   screenBar.addEventListener('pointerdown', startPointerMove);
   resizeHandle.addEventListener('pointerdown', startPointerResize);
   screen.addEventListener('pointermove', movePointer);
@@ -793,7 +859,6 @@
   addEventListener('orientationchange', () => setTimeout(onResize, 250));
   addEventListener('deviceorientation', onDeviceOrientation, true);
   document.addEventListener('visibilitychange', () => {
-    // Économise le calcul et la batterie quand l'onglet passe en arrière-plan.
     if (document.hidden) {
       cancelAnimationFrame(scanAnimation);
       cancelAnimationFrame(trackingLoop);
@@ -801,7 +866,7 @@
     } else if (handsInstance && cameraVideo.srcObject && !trackingLoop) {
       const loop = async () => {
         if (cameraVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-          try { await handsInstance.send({ image: cameraVideo }); } catch (error) { /* ignorée */ }
+          try { await handsInstance.send({ image: cameraVideo }); } catch (error) {}
         }
         trackingLoop = requestAnimationFrame(loop);
       };
