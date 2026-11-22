@@ -29,15 +29,15 @@
   const cursor = $('#hand-cursor');
   const scanButton = $('#scan-button');
   const vrButton = $('#vr-button');
-  const vrMenu = $('#vr-menu');
+  const vrTaskbar = $('#vr-taskbar');
 
   const debugMode = /[?&]debug\b/.test(location.search);
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const minSize = { width: 220, height: 160 };
   const SMOOTHING = reduceMotion ? 1 : 0.24;
-  const ORIENTATION_SMOOTH = reduceMotion ? 1 : 0.32;
-  const FOCAL_FACTOR = 1.0;  // multiplicateur du focal (px) : 1.0 ≈ 55° FOV horizontal
+  const ORIENTATION_SMOOTH = reduceMotion ? 1 : 0.28;
+  const FOCAL_FACTOR = 1.0;
 
   let objectUrl = null;
   let screenState = { x: 0, y: 0, width: 0, height: 0 };
@@ -46,32 +46,31 @@
   let twoHandResize = null;
   let motionEnabled = false;
 
-  // Orientation : heading accumulé (non borné) + pitch (beta) lissés
+  // Orientation screen-relative (déjà compensée par l'angle d'écran)
   let rawHeading = null;
   let accumulatedHeading = 0;
-  let smoothedHeadingAcc = 0;
-  let rawBeta = null;
-  let smoothedBeta = null;
+  let smoothedHeading = 0;
+  let smoothedPitch = null;
 
-  // Ancres monde
-  let screenAnchor = null;  // { heading, pitch(beta), offsetX, offsetY }
-  let menuAnchor = null;
+  // Ancres monde (offset = position à l'écran au moment de l'ancrage)
+  let screenAnchor = null;
+  let taskbarAnchor = null;
 
-  // VR
+  // Taskbar
   let vrMode = false;
-  let vrMenuTarget = { x: 0, y: 0 };
-  let vrMenuState = { x: 0, y: 0 };
+  let taskbarTarget = { x: 0, y: 0 };
+  let taskbarState = { x: 0, y: 0 };
+  let taskbarSize = { w: 300, h: 60 };
   let menuClickLatch = false;
   let playClickLatch = false;
+  let hoveredBtn = null;
 
-  // Scan
   let scanActive = false;
   let scanAnimation = 0;
   let previousLuma = null;
   let depthVertices = [];
   let lastScanAt = 0;
 
-  // Tracking
   let lastFrameAt = 0;
   let fps = 0;
   let smoothPoint = null;
@@ -91,42 +90,35 @@
   /* Utilitaires                                                         */
   /* ------------------------------------------------------------------ */
 
-  function setStatus(message, mode = 'ready') {
-    status.textContent = message;
-    statusDot.className = `status-dot ${mode}`;
-  }
-  function setHint(message) { hint.textContent = message; }
-  function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), hi); }
-  function lerp(a, b, t) { return a + (b - a) * t; }
-  function angleDelta(from, to) { return ((to - from + 540) % 360) - 180; }
-  function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0)); }
+  const setStatus = (m, mode = 'ready') => { status.textContent = m; statusDot.className = `status-dot ${mode}`; };
+  const setHint = m => { hint.textContent = m; };
+  const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const angleDelta = (f, t) => ((t - f + 540) % 360) - 180;
+  const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0));
+  const screenAngle = () => (screen.orientation?.angle ?? window.orientation ?? 0);
 
   /* ------------------------------------------------------------------ */
   /* Écran vidéo                                                         */
   /* ------------------------------------------------------------------ */
 
   function initialiseScreen() {
-    const width = Math.min(520, innerWidth * (innerWidth < 600 ? 0.78 : 0.62));
-    const height = width * 0.64;
-    targetState = { x: (innerWidth - width) / 2, y: (innerHeight - height) / 2, width, height };
+    const base = Math.min(520, innerWidth * (innerWidth < 600 ? 0.78 : 0.62));
+    const height = base * 0.64;
+    targetState = { x: (innerWidth - base) / 2, y: (innerHeight - height) / 2, width: base, height };
     screenState = { ...targetState };
     applyScreen(true);
     placeScreenAnchor();
   }
 
   function showScreen() {
-    if (screen.hidden) {
-      screen.hidden = false;
-      initialiseScreen();
-    }
+    if (screen.hidden) { screen.hidden = false; initialiseScreen(); }
   }
 
   function clampTarget(allowOffscreen) {
     if (allowOffscreen) return;
-    const maxX = Math.max(0, innerWidth - targetState.width);
-    const maxY = Math.max(0, innerHeight - targetState.height);
-    targetState.x = clamp(targetState.x, 0, maxX);
-    targetState.y = clamp(targetState.y, 0, maxY);
+    targetState.x = clamp(targetState.x, 0, Math.max(0, innerWidth - targetState.width));
+    targetState.y = clamp(targetState.y, 0, Math.max(0, innerHeight - targetState.height));
   }
 
   function applyScreen(snap = false) {
@@ -144,62 +136,43 @@
     updateSpatialPose();
   }
 
-  // Parallaxe CSS : petite rotation de l'écran selon l'écart au cap ancré
   function updateSpatialPose() {
-    if (!screenAnchor || smoothedBeta === null) {
+    if (!screenAnchor || smoothedPitch === null) {
       screen.style.setProperty('--yaw', '-3deg');
       screen.style.setProperty('--pitch', '1deg');
       screen.style.setProperty('--lift', '0px');
       return;
     }
-    const headingDelta = smoothedHeadingAcc - screenAnchor.heading;
-    const pitchDelta = smoothedBeta - screenAnchor.pitch;
-    const yaw = clamp(-headingDelta * 0.10, -8, 8);
-    const pitch = clamp(pitchDelta * 0.10, -6, 6);
-    const lift = clamp(Math.abs(headingDelta) * 0.30, 0, 20);
-    screen.style.setProperty('--yaw', `${yaw.toFixed(2)}deg`);
-    screen.style.setProperty('--pitch', `${pitch.toFixed(2)}deg`);
-    screen.style.setProperty('--lift', `${lift.toFixed(1)}px`);
+    const hd = accumulatedHeading - screenAnchor.heading;
+    const pd = smoothedPitch - screenAnchor.pitch;
+    screen.style.setProperty('--yaw', `${clamp(-hd * 0.10, -8, 8).toFixed(2)}deg`);
+    screen.style.setProperty('--pitch', `${clamp(pd * 0.10, -6, 6).toFixed(2)}deg`);
+    screen.style.setProperty('--lift', `${clamp(Math.abs(hd) * 0.30, 0, 20).toFixed(1)}px`);
   }
 
-  function bounds() {
-    return { left: screenState.x, top: screenState.y, right: screenState.x + screenState.width, bottom: screenState.y + screenState.height };
-  }
-  function pointInScreen(point) {
-    const b = bounds();
-    return point.x >= b.left && point.x <= b.right && point.y >= b.top && point.y <= b.bottom;
-  }
-  function pointOnResizeHandle(point) {
-    const b = bounds();
-    return point.x >= b.right - 58 && point.x <= b.right + 12 && point.y >= b.bottom - 58 && point.y <= b.bottom + 12;
-  }
+  const bounds = () => ({ left: screenState.x, top: screenState.y, right: screenState.x + screenState.width, bottom: screenState.y + screenState.height });
+  const pointInScreen = p => { const b = bounds(); return p.x >= b.left && p.x <= b.right && p.y >= b.top && p.y <= b.bottom; };
+  const pointOnResizeHandle = p => { const b = bounds(); return p.x >= b.right - 58 && p.x <= b.right + 12 && p.y >= b.bottom - 58 && p.y <= b.bottom + 12; };
 
   /* ------------------------------------------------------------------ */
-  /* Projection sphérique 3D — la clé du 360°                            */
+  /* Projection sphérique 3D — compatible 360° + portrait/paysage        */
   /* ------------------------------------------------------------------ */
 
-  // Projection d'une ancre monde vers l'écran, selon l'orientation actuelle.
-  // Renvoie la position pixel de l'ancre (centrée = innerWidth/2, innerHeight/2),
-  // ou null si l'ancre est derrière la caméra (hors du champ).
   function projectAnchorToScreen(anchor) {
-    if (smoothedBeta === null) return null;
-
-    // Vecteur monde de l'ancre (sphère unité). pitch(beta) → élévation = beta - 90
+    if (smoothedPitch === null) return null;
     const anchorElevRad = (anchor.pitch - 90) * Math.PI / 180;
     const anchorHeadRad = anchor.heading * Math.PI / 180;
     const Ax = Math.sin(anchorHeadRad) * Math.cos(anchorElevRad);
     const Ay = Math.sin(anchorElevRad);
     const Az = Math.cos(anchorHeadRad) * Math.cos(anchorElevRad);
 
-    // Base caméra courante
-    const camElevRad = (smoothedBeta - 90) * Math.PI / 180;
-    const camHeadRad = smoothedHeadingAcc * Math.PI / 180;
+    const camElevRad = (smoothedPitch - 90) * Math.PI / 180;
+    const camHeadRad = smoothedHeading * Math.PI / 180;
     const Fx = Math.sin(camHeadRad) * Math.cos(camElevRad);
     const Fy = Math.sin(camElevRad);
     const Fz = Math.cos(camHeadRad) * Math.cos(camElevRad);
     const Rx = Math.cos(camHeadRad);
     const Rz = -Math.sin(camHeadRad);
-    // U = F × R
     const Ux = Fy * Rz;
     const Uy = Fz * Rx - Fx * Rz;
     const Uz = -Fy * Rx;
@@ -209,28 +182,21 @@
 
     const right = Ax * Rx + Az * Rz;
     const up = Ax * Ux + Ay * Uy + Az * Uz;
-
     const focal = innerWidth * FOCAL_FACTOR;
-    const offsetX = (right / depth) * focal;
-    const offsetY = -(up / depth) * focal;
 
     return {
-      x: innerWidth / 2 + offsetX,
-      y: innerHeight / 2 + offsetY
+      x: innerWidth / 2 + (right / depth) * focal,
+      y: innerHeight / 2 - (up / depth) * focal
     };
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Ancrage écran                                                       */
-  /* ------------------------------------------------------------------ */
-
   function placeScreenAnchor() {
-    if (!motionEnabled || smoothedBeta === null || screen.hidden) return;
+    if (!motionEnabled || smoothedPitch === null || screen.hidden) return;
     const cx = targetState.x + targetState.width / 2;
     const cy = targetState.y + targetState.height / 2;
     screenAnchor = {
-      heading: smoothedHeadingAcc,
-      pitch: smoothedBeta,
+      heading: accumulatedHeading,
+      pitch: smoothedPitch,
       offsetX: cx - innerWidth / 2,
       offsetY: cy - innerHeight / 2
     };
@@ -247,15 +213,12 @@
     anchorLabel.textContent = 'MANIPULATION';
     if (mode === 'resize') {
       interaction = { mode, source, startX: point.x, startY: point.y, width: targetState.width, height: targetState.height };
-      setHint('Pincement actif : éloignez votre main pour agrandir la fenêtre.');
     } else {
       interaction = { mode: 'move', source, offsetX: point.x - targetState.x, offsetY: point.y - targetState.y };
-      setHint('Pincement actif : déplacez la main pour poser l’écran.');
     }
     screen.classList.add('grabbed');
     return true;
   }
-
   function updateInteraction(point, source) {
     if (!interaction || interaction.source !== source) return;
     if (interaction.mode === 'move') {
@@ -267,21 +230,17 @@
     }
     applyScreen();
   }
-
   function endInteraction(source) {
     if (!interaction || interaction.source !== source) return;
     interaction = null;
     screen.classList.remove('grabbed');
     placeScreenAnchor();
-    setHint('Écran posé.');
   }
-
   function resizeFromTwoHands(a, b) {
     const dist = Math.hypot(a.x - b.x, a.y - b.y);
     if (!twoHandResize) {
       if (screen.hidden || !pointInScreen(a)) return;
       screenAnchor = null;
-      anchorLabel.textContent = 'REDIMENSIONNEMENT';
       twoHandResize = { distance: Math.max(dist, 1), width: targetState.width, height: targetState.height };
       screen.classList.add('grabbed');
       return;
@@ -291,7 +250,6 @@
     targetState.height = clamp(twoHandResize.height * scale, minSize.height, innerHeight * 0.82);
     applyScreen();
   }
-
   function endTwoHandResize() {
     if (!twoHandResize) return;
     twoHandResize = null;
@@ -300,11 +258,10 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* Vidéo importée                                                      */
+  /* Vidéo                                                               */
   /* ------------------------------------------------------------------ */
 
   function openFilePicker() { fileInput.click(); }
-
   function loadVideo(event) {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
@@ -318,54 +275,61 @@
     playBtn.classList.remove('playing');
     screenName.textContent = file.name;
     showScreen();
-    setStatus('Vidéo ouverte dans l’écran spatial', 'active');
-    setHint('Pincez la barre supérieure pour déplacer l’écran, ou le centre pour lancer la vidéo.');
+    setStatus('Vidéo ouverte', 'active');
     event.target.value = '';
   }
-
-  function pointerPosition(event) { return { x: event.clientX, y: event.clientY }; }
+  function pointerPosition(e) { return { x: e.clientX, y: e.clientY }; }
   function startPointerMove(e) { e.preventDefault(); beginInteraction(pointerPosition(e), 'move', 'pointer'); screen.setPointerCapture(e.pointerId); }
   function startPointerResize(e) { e.preventDefault(); e.stopPropagation(); beginInteraction(pointerPosition(e), 'resize', 'pointer'); screen.setPointerCapture(e.pointerId); }
   function movePointer(e) { updateInteraction(pointerPosition(e), 'pointer'); }
   function endPointer() { endInteraction('pointer'); }
 
   /* ------------------------------------------------------------------ */
-  /* Hit-tests VR                                                        */
+  /* Hit-tests taskbar / play                                            */
   /* ------------------------------------------------------------------ */
-
-  function pointOnVrMenu(point) {
-    if (vrMenu.hidden) return null;
-    const rect = vrMenu.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return null;
-    if (point.x < rect.left - 8 || point.x > rect.right + 8 || point.y < rect.top - 8 || point.y > rect.bottom + 8) return null;
-    for (const btn of vrMenu.querySelectorAll('button')) {
-      const br = btn.getBoundingClientRect();
-      if (point.x >= br.left && point.x <= br.right && point.y >= br.top && point.y <= br.bottom) return btn;
-    }
-    return null;
-  }
 
   function pointOnPlayButton(point) {
     if (screen.hidden || playBtn.hidden) return null;
     const rect = playBtn.getBoundingClientRect();
     if (rect.width === 0) return null;
-    const m = 18; // marge tactile
+    const m = 22;
     if (point.x < rect.left - m || point.x > rect.right + m) return null;
     if (point.y < rect.top - m || point.y > rect.bottom + m) return null;
     return playBtn;
   }
 
-  function handleVrMenuAction(action) {
+  function findVrButton(point) {
+    if (vrTaskbar.hidden) return null;
+    const rect = vrTaskbar.getBoundingClientRect();
+    if (rect.width === 0) return null;
+    if (point.x < rect.left - 20 || point.x > rect.right + 20) return null;
+    if (point.y < rect.top - 20 || point.y > rect.bottom + 20) return null;
+    for (const btn of vrTaskbar.querySelectorAll('button')) {
+      const br = btn.getBoundingClientRect();
+      const m = 14; // marge tactile
+      if (point.x >= br.left - m && point.x <= br.right + m && point.y >= br.top - m && point.y <= br.bottom + m) return btn;
+    }
+    return null;
+  }
+
+  function handleVrAction(action) {
     switch (action) {
       case 'reanchor':
         placeScreenAnchor();
-        placeMenuAnchor();
+        placeTaskbarAnchor();
         setStatus('Ancres replacées', 'active');
+        break;
+      case 'scan':
+        toggleRoomScan();
+        break;
+      case 'play':
+        if (uploadedVideo.src) {
+          if (uploadedVideo.paused) uploadedVideo.play().catch(() => {});
+          else uploadedVideo.pause();
+        }
         break;
       case 'close-screen':
         if (!screen.hidden) { screen.hidden = true; uploadedVideo.pause(); }
-        if (vrMode) toggleVRMode();
-        setStatus('Écran fermé', 'ready');
         break;
       case 'exit':
         if (vrMode) toggleVRMode();
@@ -373,32 +337,36 @@
     }
   }
 
-  /* ------------------------------------------------------------------ */
-  /* Menu VR                                                             */
-  /* ------------------------------------------------------------------ */
-
-  function applyVrMenuPosition(snap = false) {
-    if (vrMenu.hidden) return;
-    const t = snap ? 1 : SMOOTHING;
-    vrMenuState.x = lerp(vrMenuState.x, vrMenuTarget.x, t);
-    vrMenuState.y = lerp(vrMenuState.y, vrMenuTarget.y, t);
-    vrMenu.style.left = `${vrMenuState.x.toFixed(1)}px`;
-    vrMenu.style.top = `${vrMenuState.y.toFixed(1)}px`;
+  function flashVrButton(btn) {
+    btn.classList.add('pressed');
+    setTimeout(() => btn.classList.remove('pressed'), 180);
   }
 
-  function placeMenuAnchor() {
-    if (!motionEnabled || smoothedBeta === null || vrMenu.hidden) { menuAnchor = null; return; }
-    const rect = vrMenu.getBoundingClientRect();
+  /* ------------------------------------------------------------------ */
+  /* Taskbar VR                                                          */
+  /* ------------------------------------------------------------------ */
+
+  function applyTaskbarPosition(snap = false) {
+    if (vrTaskbar.hidden) return;
+    const t = snap ? 1 : SMOOTHING;
+    taskbarState.x = lerp(taskbarState.x, taskbarTarget.x, t);
+    taskbarState.y = lerp(taskbarState.y, taskbarTarget.y, t);
+    vrTaskbar.style.left = `${taskbarState.x.toFixed(1)}px`;
+    vrTaskbar.style.top = `${taskbarState.y.toFixed(1)}px`;
+  }
+
+  function placeTaskbarAnchor() {
+    if (!motionEnabled || smoothedPitch === null || vrTaskbar.hidden) { taskbarAnchor = null; return; }
+    const rect = vrTaskbar.getBoundingClientRect();
     if (rect.width === 0) return;
-    const cx = vrMenuTarget.x + rect.width / 2;
-    const cy = vrMenuTarget.y + rect.height / 2;
-    menuAnchor = {
-      heading: smoothedHeadingAcc,
-      pitch: smoothedBeta,
-      offsetX: cx - innerWidth / 2,
-      offsetY: cy - innerHeight / 2,
-      width: rect.width,
-      height: rect.height
+    taskbarSize = { w: rect.width, h: rect.height };
+    taskbarAnchor = {
+      heading: accumulatedHeading,
+      pitch: smoothedPitch,
+      offsetX: taskbarTarget.x + rect.width / 2 - innerWidth / 2,
+      offsetY: taskbarTarget.y + rect.height / 2 - innerHeight / 2,
+      w: rect.width,
+      h: rect.height
     };
   }
 
@@ -408,18 +376,27 @@
     vrButton.classList.toggle('active', vrMode);
 
     if (vrMode) {
-      vrMenuTarget = { x: Math.max(14, innerWidth - 210), y: Math.max(90, innerHeight * 0.15) };
-      vrMenuState = { ...vrMenuTarget };
-      vrMenu.hidden = false;
-      applyVrMenuPosition(true);
-      placeMenuAnchor();
+      vrTaskbar.hidden = false;
+      // Position initiale : centré, 22% depuis le bas de l'écran
+      requestAnimationFrame(() => {
+        const rect = vrTaskbar.getBoundingClientRect();
+        taskbarSize = { w: rect.width, h: rect.height };
+        taskbarTarget = {
+          x: (innerWidth - rect.width) / 2,
+          y: innerHeight - rect.height - innerHeight * 0.18
+        };
+        taskbarState = { ...taskbarTarget };
+        applyTaskbarPosition(true);
+        placeTaskbarAnchor();
+      });
       if (!screen.hidden) placeScreenAnchor();
-      setStatus('Mode VR — pincez un bouton pour cliquer', 'active');
-      setHint('Pincez l’index + pouce sur un bouton pour cliquer · Pincez la barre pour déplacer l’écran.');
+      setStatus('Mode VR — pincez un bouton de la barre', 'active');
+      setHint('Pointez un bouton rond avec l’index + pouce pour cliquer · Pincez la barre de l’écran pour le déplacer.');
     } else {
-      vrMenu.hidden = true;
-      menuAnchor = null;
+      vrTaskbar.hidden = true;
+      taskbarAnchor = null;
       menuClickLatch = false;
+      if (hoveredBtn) { hoveredBtn.classList.remove('hovered'); hoveredBtn = null; }
       setStatus('Mode VR désactivé', 'ready');
       setHint('Écran posé.');
       if (!screen.hidden) placeScreenAnchor();
@@ -427,7 +404,7 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* Mains                                                               */
+  /* Mains — modèle 3D beige                                             */
   /* ------------------------------------------------------------------ */
 
   function fingerExtended(lm, tip, pip) { return distance(lm[tip], lm[0]) > distance(lm[pip], lm[0]) * 1.16; }
@@ -438,9 +415,7 @@
     if (pinchDist < 0.05) pinchHeld = true;
     else if (pinchDist > 0.07) pinchHeld = false;
     return {
-      index,
-      raw,
-      point: raw,
+      index, raw, point: raw,
       depth: clamp(0.5 - (lm[8].z || 0) * 2.5, 0, 1),
       pinch: pinchHeld,
       pinchDistance: pinchDist,
@@ -467,43 +442,156 @@
     cursor.classList.toggle('pinching', pinching);
   }
 
-  function drawHandSkeleton(lm) {
-    const w = handCanvas.width, h = handCanvas.height;
-    const scale = w / 1280;
+  /* ----- Modèle 3D main beige ----- */
+
+  const SKIN = { base: '#eac5a3', light: '#f8e3ca', shade: '#c09064', edge: 'rgba(140, 95, 60, 0.55)', shadow: 'rgba(100, 65, 40, 0.5)' };
+
+  function draw3DHand(landmarks) {
+    const W = handCanvas.width, H = handCanvas.height;
+    const pts = landmarks.map(lm => ({
+      x: lm.x * W,
+      y: lm.y * H,
+      depth: clamp(0.5 - (lm.z || 0) * 2.5, 0, 1)
+    }));
+
+    const avgDepth = pts.reduce((s, p) => s + p.depth, 0) / pts.length;
+    const sizeScale = (W / 400) * (0.9 + avgDepth * 0.4);
+
+    const chains = [
+      { idx: [17, 18, 19, 20], wm: 0.82 },
+      { idx: [13, 14, 15, 16], wm: 0.95 },
+      { idx: [9, 10, 11, 12], wm: 1.05 },
+      { idx: [5, 6, 7, 8], wm: 1.0 },
+      { idx: [1, 2, 3, 4], wm: 1.18 }
+    ];
+
+    // 1) Ombre globale (offset bas-droite)
+    handContext.save();
+    handContext.translate(sizeScale * 3, sizeScale * 4);
+    chains.forEach(c => paintFinger(pts, c.idx, c.wm * sizeScale, SKIN.shadow, false));
+    paintPalm(pts, sizeScale, SKIN.shadow, false);
+    handContext.restore();
+
+    // 2) Doigts (base)
+    chains.forEach(c => paintFinger(pts, c.idx, c.wm * sizeScale, SKIN.base, true));
+
+    // 3) Paume (couvre la base des doigts)
+    paintPalm(pts, sizeScale, SKIN.base, true);
+
+    // 4) Reflets sur les doigts
+    chains.forEach(c => paintFingerHighlight(pts, c.idx, c.wm * sizeScale));
+
+    // 5) Reflet global sur la paume
+    paintPalmHighlight(pts, sizeScale);
+  }
+
+  function paintFinger(pts, chain, wm, color, outline) {
     handContext.lineCap = 'round';
-    handContext.lineWidth = 5.5 * scale;
-    handContext.strokeStyle = 'rgba(20, 60, 110, .5)';
-    HAND_CONNECTIONS.forEach(([a, b]) => {
+    handContext.lineJoin = 'round';
+    const n = chain.length;
+
+    for (let i = 0; i < n - 1; i++) {
+      const a = pts[chain[i]];
+      const b = pts[chain[i + 1]];
+      const t = i / Math.max(1, n - 2);
+      const wa = (8 - t * 3 + a.depth * 4) * wm;
+      const wb = (8 - Math.min(1, t + 0.35) * 3 + b.depth * 4) * wm;
+
       handContext.beginPath();
-      handContext.moveTo(lm[a].x * w, lm[a].y * h);
-      handContext.lineTo(lm[b].x * w, lm[b].y * h);
+      handContext.moveTo(a.x, a.y);
+      handContext.lineTo(b.x, b.y);
+      handContext.lineWidth = (wa + wb) / 2;
+      handContext.strokeStyle = color;
       handContext.stroke();
-    });
-    handContext.lineWidth = 2.4 * scale;
-    handContext.strokeStyle = 'rgba(120, 232, 255, .85)';
-    HAND_CONNECTIONS.forEach(([a, b]) => {
+
+      // Joint lisse
       handContext.beginPath();
-      handContext.moveTo(lm[a].x * w, lm[a].y * h);
-      handContext.lineTo(lm[b].x * w, lm[b].y * h);
-      handContext.stroke();
-    });
-    lm.forEach((landmark, i) => {
-      const d = clamp(0.5 - landmark.z * 2.5, 0, 1);
-      const x = landmark.x * w;
-      const y = landmark.y * h;
-      const r = (2.4 + d * 3.8) * scale;
-      handContext.beginPath();
-      handContext.arc(x, y, r, 0, Math.PI * 2);
-      handContext.fillStyle = `rgba(${Math.round(110 + d * 70)}, 245, 255, ${0.35 + d * 0.6})`;
+      handContext.arc(a.x, a.y, wa / 2, 0, Math.PI * 2);
+      handContext.fillStyle = color;
       handContext.fill();
-      if (i === 8 || i === 4) {
-        handContext.beginPath();
-        handContext.arc(x, y, r * 2.2, 0, Math.PI * 2);
-        handContext.strokeStyle = `rgba(69, 221, 255, ${0.25 + d * 0.5})`;
-        handContext.lineWidth = 1.5 * scale;
-        handContext.stroke();
-      }
-    });
+    }
+    // Bout du doigt
+    const tip = pts[chain[n - 1]];
+    const tipW = (5.5 + tip.depth * 4) * wm;
+    handContext.beginPath();
+    handContext.arc(tip.x, tip.y, tipW / 2, 0, Math.PI * 2);
+    handContext.fillStyle = color;
+    handContext.fill();
+
+    if (outline) {
+      handContext.strokeStyle = SKIN.edge;
+      handContext.lineWidth = Math.max(1, wm * 0.25);
+      handContext.beginPath();
+      handContext.arc(tip.x, tip.y, tipW / 2, 0, Math.PI * 2);
+      handContext.stroke();
+    }
+  }
+
+  function paintFingerHighlight(pts, chain, wm) {
+    handContext.lineCap = 'round';
+    handContext.strokeStyle = SKIN.light;
+    for (let i = 0; i < chain.length - 1; i++) {
+      const a = pts[chain[i]];
+      const b = pts[chain[i + 1]];
+      const offX = -wm * 0.35;
+      const offY = -wm * 0.35;
+      handContext.beginPath();
+      handContext.moveTo(a.x + offX, a.y + offY);
+      handContext.lineTo(b.x + offX, b.y + offY);
+      handContext.lineWidth = (6 - i * 1.2) * wm / 8;
+      handContext.stroke();
+    }
+  }
+
+  function paintPalm(pts, scale, color, outline) {
+    const p0 = pts[0], p1 = pts[1], p2 = pts[2], p5 = pts[5], p9 = pts[9], p13 = pts[13], p17 = pts[17];
+    const cx = (p0.x + p9.x) / 2;
+    const cy = (p0.y + p9.y) / 2;
+
+    handContext.beginPath();
+    handContext.moveTo(p0.x, p0.y);
+    handContext.lineTo(p1.x, p1.y);
+    handContext.lineTo(p2.x, p2.y);
+
+    // Creux pouce-index (concave vers le centre)
+    const web1X = ((p2.x + p5.x) / 2) * 0.65 + cx * 0.35;
+    const web1Y = ((p2.y + p5.y) / 2) * 0.65 + cy * 0.35;
+    handContext.quadraticCurveTo(web1X, web1Y, p5.x, p5.y);
+
+    handContext.lineTo(p9.x, p9.y);
+    handContext.lineTo(p13.x, p13.y);
+    handContext.lineTo(p17.x, p17.y);
+
+    // Bord auriculaire → poignet
+    const edge1X = ((p17.x + p0.x) / 2) * 0.55 + cx * 0.45;
+    const edge1Y = ((p17.y + p0.y) / 2) * 0.55 + cy * 0.45;
+    handContext.quadraticCurveTo(edge1X, edge1Y, p0.x, p0.y);
+
+    handContext.closePath();
+    handContext.fillStyle = color;
+    handContext.fill();
+
+    if (outline) {
+      handContext.strokeStyle = SKIN.edge;
+      handContext.lineWidth = Math.max(1, scale * 0.4);
+      handContext.stroke();
+    }
+  }
+
+  function paintPalmHighlight(pts, scale) {
+    const p0 = pts[0], p5 = pts[5], p9 = pts[9];
+    const cx = (p0.x + p9.x) / 2;
+    const cy = (p0.y + p9.y) / 2;
+    const r = Math.abs(p5.y - p0.y) * 0.42;
+    if (r < 4) return;
+    const grad = handContext.createRadialGradient(cx - r * 0.35, cy - r * 0.35, 2, cx, cy, r);
+    grad.addColorStop(0, 'rgba(255, 245, 235, 0.42)');
+    grad.addColorStop(0.7, 'rgba(255, 240, 225, 0.10)');
+    grad.addColorStop(1, 'rgba(255, 240, 225, 0)');
+    handContext.beginPath();
+    handContext.arc(cx, cy, r, 0, Math.PI * 2);
+    handContext.fillStyle = grad;
+    handContext.fill();
   }
 
   /* ------------------------------------------------------------------ */
@@ -523,9 +611,9 @@
     for (let y = step; y < height - step; y += step) {
       for (let x = step; x < width - step; x += step) {
         const i = y * width + x;
-        const hDiff = Math.abs(luma[i + step] - luma[i - step]);
-        const vDiff = Math.abs(luma[i + width * step] - luma[i - width * step]);
-        const structure = clamp((hDiff + vDiff) / 150, 0, 1);
+        const hd = Math.abs(luma[i + step] - luma[i - step]);
+        const vd = Math.abs(luma[i + width * step] - luma[i - width * step]);
+        const structure = clamp((hd + vd) / 150, 0, 1);
         const temporal = previousLuma ? clamp(Math.abs(luma[i] - previousLuma[i]) / 46, 0, 1) : 0;
         const floorP = y / (height - 1);
         const near = clamp(0.12 + structure * 0.31 + temporal * 0.20 + floorP * 0.37, 0, 1);
@@ -538,13 +626,13 @@
   }
 
   function drawDepthField() {
-    const density = Math.min(devicePixelRatio, 2);
-    scanContext.setTransform(density, 0, 0, density, 0, 0);
+    const d = Math.min(devicePixelRatio, 2);
+    scanContext.setTransform(d, 0, 0, d, 0, 0);
     scanContext.clearRect(0, 0, innerWidth, innerHeight);
     if (!depthVertices.length) return;
     const cols = Math.floor((scanGrid.width - scanGrid.step * 2 - 1) / scanGrid.step) + 1;
     let drift = 0;
-    if (screenAnchor) drift = (smoothedHeadingAcc - screenAnchor.heading) * 1.8;
+    if (screenAnchor) drift = (accumulatedHeading - screenAnchor.heading) * 1.8;
     scanContext.lineWidth = 0.65;
     for (let i = 0; i < depthVertices.length; i++) {
       const v = depthVertices[i];
@@ -582,14 +670,14 @@
     if (scanActive) {
       previousLuma = null;
       lastScanAt = 0;
-      setStatus('Scan 3D relatif actif', 'active');
+      setStatus('Scan 3D actif', 'active');
       scanAnimation = requestAnimationFrame(runScanLoop);
     } else {
       cancelAnimationFrame(scanAnimation);
       scanAnimation = 0;
       depthVertices = [];
       scanContext.clearRect(0, 0, scanCanvas.width, scanCanvas.height);
-      setStatus('Scan 3D relatif arrêté', 'ready');
+      setStatus('Scan arrêté', 'ready');
     }
   }
 
@@ -613,6 +701,7 @@
         pinchHeld = false;
         menuClickLatch = false;
         playClickLatch = false;
+        if (hoveredBtn) { hoveredBtn.classList.remove('hovered'); hoveredBtn = null; }
         if (interaction) endInteraction('hand');
         endTwoHandResize();
         lastHands = [];
@@ -622,12 +711,22 @@
     handLostSince = 0;
 
     lastHands = list.map((lm, i) => handData(lm, i));
-    lastHands.forEach(h => drawHandSkeleton(h.landmarks));
+    lastHands.forEach(h => draw3DHand(h.landmarks));
 
     const primary = lastHands[0];
     const point = smoothCursor(primary.raw);
     primary.point = point;
     showCursor(point, primary.pinch, primary.depth);
+
+    // Feedback hover sur les boutons de la taskbar
+    if (vrMode && !vrTaskbar.hidden) {
+      const btn = findVrButton(point);
+      if (btn !== hoveredBtn) {
+        if (hoveredBtn) hoveredBtn.classList.remove('hovered');
+        if (btn) btn.classList.add('hovered');
+        hoveredBtn = btn;
+      }
+    }
 
     const doublePinch = lastHands.length > 1 && lastHands[0].pinch && lastHands[1].pinch;
     if (doublePinch) {
@@ -639,16 +738,18 @@
 
     if (primary.pinch) {
       if (!interaction && !menuClickLatch && !playClickLatch) {
-        const playHit = pointOnPlayButton(point);
-        if (playHit) {
-          playClickLatch = true;
-          if (uploadedVideo.paused) uploadedVideo.play().catch(() => {});
-          else uploadedVideo.pause();
+        // Priorité : bouton taskbar > bouton play > resize/move écran
+        const vrBtn = findVrButton(point);
+        if (vrBtn) {
+          menuClickLatch = true;
+          flashVrButton(vrBtn);
+          handleVrAction(vrBtn.dataset.vrAction);
         } else {
-          const menuBtn = pointOnVrMenu(point);
-          if (menuBtn) {
-            menuClickLatch = true;
-            handleVrMenuAction(menuBtn.dataset.vrAction);
+          const playHit = pointOnPlayButton(point);
+          if (playHit) {
+            playClickLatch = true;
+            if (uploadedVideo.paused) uploadedVideo.play().catch(() => {});
+            else uploadedVideo.pause();
           } else if (pointOnResizeHandle(point)) {
             beginInteraction(point, 'resize', 'hand');
           } else if (pointInScreen(point)) {
@@ -662,8 +763,8 @@
       playClickLatch = false;
       if (interaction) endInteraction('hand');
       if (vrMode) {
-        const menuBtn = pointOnVrMenu(point);
-        setStatus(menuBtn ? `Prêt : ${menuBtn.textContent.trim()}` : 'Mode VR — pincez pour cliquer', 'active');
+        const btn = hoveredBtn;
+        setStatus(btn ? `Prêt : ${btn.title || btn.textContent}` : 'Mode VR — pointez un bouton', 'active');
       } else if (primary.indexOpen) {
         setStatus('Index détecté — pincez pour saisir', 'active');
       } else {
@@ -673,7 +774,7 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* Caméra arrière                                                      */
+  /* Caméra                                                              */
   /* ------------------------------------------------------------------ */
 
   function stopStream(s) { s?.getTracks().forEach(t => t.stop()); }
@@ -761,7 +862,7 @@
     } catch (e) {
       cameraButton.disabled = false;
       cameraButton.textContent = 'Réessayer la caméra';
-      setStatus(e.message === 'rear-camera-unavailable' ? 'Caméra arrière introuvable' : 'Caméra indisponible', '');
+      setStatus('Caméra indisponible', '');
     }
   }
 
@@ -780,67 +881,94 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* Orientation — 360° via heading accumulé                             */
+  /* Orientation 360° compatible portrait/paysage                        */
   /* ------------------------------------------------------------------ */
 
-  function onDeviceOrientation(event) {
-    const heading = Number.isFinite(event.webkitCompassHeading) ? event.webkitCompassHeading : event.alpha;
-    if (!Number.isFinite(heading) || !Number.isFinite(event.beta)) return;
+  // Convertit (alpha, beta, gamma) bruts + angle d'écran → { heading, pitch }
+  // heading = cap de l'axe "haut de l'écran"
+  // pitch   = élévation de l'axe "haut de l'écran" (90° = vertical, 0° = à plat face au sol)
+  function adjustOrientation(alpha, beta, gamma, screenAngleDeg) {
+    const a = alpha * Math.PI / 180;
+    const b = beta * Math.PI / 180;
+    const g = gamma * Math.PI / 180;
+    const s = screenAngleDeg * Math.PI / 180;
 
-    if (rawHeading === null) {
-      accumulatedHeading = heading;
-      smoothedHeadingAcc = heading;
-    } else {
-      accumulatedHeading += angleDelta(rawHeading, heading);
-    }
-    rawHeading = heading;
+    const cA = Math.cos(a), sA = Math.sin(a);
+    const cB = Math.cos(b), sB = Math.sin(b);
+    const cG = Math.cos(g), sG = Math.sin(g);
+    const cS = Math.cos(s), sS = Math.sin(s);
 
-    rawBeta = event.beta;
-    if (smoothedBeta === null) smoothedBeta = rawBeta;
+    // R_world_from_device (Z-X'-Y'' intrinsèque)
+    const R11 = cA * cG - sA * sB * sG;
+    const R12 = -sA * cB;
+    const R21 = sA * cG + cA * sB * sG;
+    const R22 = cA * cB;
+    const R31 = -cB * sG;
+    const R32 = sB;
 
-    smoothedHeadingAcc = lerp(smoothedHeadingAcc, accumulatedHeading, ORIENTATION_SMOOTH);
-    smoothedBeta = lerp(smoothedBeta, rawBeta, ORIENTATION_SMOOTH);
+    // R_screen = R_device * Rz(-screenAngle)
+    const M12 = sS * R11 + cS * R12;
+    const M22 = sS * R21 + cS * R22;
+    const M32 = sS * R31 + cS * R32;
 
-    updateOrientationAnchor();
+    const headingRad = Math.atan2(M22, M12);
+    const pitchRad = Math.asin(clamp(M32, -1, 1));
+
+    return {
+      heading: (headingRad * 180 / Math.PI + 360) % 360,
+      pitch: pitchRad * 180 / Math.PI
+    };
   }
 
-  function updateOrientationAnchor() {
-    if (smoothedBeta === null) return;
+  function onDeviceOrientation(event) {
+    const a = Number.isFinite(event.webkitCompassHeading) ? event.webkitCompassHeading : event.alpha;
+    if (!Number.isFinite(a) || !Number.isFinite(event.beta)) return;
 
-    // Auto-placement des ancres manquantes
-    if (motionEnabled) {
-      if (!screenAnchor && !screen.hidden && !interaction && !twoHandResize) placeScreenAnchor();
+    const adjusted = adjustOrientation(a, event.beta, event.gamma || 0, screenAngle());
+
+    if (rawHeading === null) {
+      accumulatedHeading = adjusted.heading;
+      smoothedHeading = adjusted.heading;
+    } else {
+      accumulatedHeading += angleDelta(rawHeading, adjusted.heading);
     }
-    if (vrMode && !menuAnchor && !vrMenu.hidden) placeMenuAnchor();
+    rawHeading = adjusted.heading;
 
-    // Écran
+    smoothedHeading = lerp(smoothedHeading, accumulatedHeading, ORIENTATION_SMOOTH);
+    smoothedPitch = smoothedPitch === null ? adjusted.pitch : lerp(smoothedPitch, adjusted.pitch, ORIENTATION_SMOOTH);
+
+    updateAnchors();
+  }
+
+  function updateAnchors() {
+    if (smoothedPitch === null) return;
+
+    if (motionEnabled && !screenAnchor && !screen.hidden && !interaction && !twoHandResize) {
+      placeScreenAnchor();
+    }
+    if (vrMode && !taskbarAnchor && !vrTaskbar.hidden) {
+      placeTaskbarAnchor();
+    }
+
     if (screenAnchor && !interaction && !twoHandResize && !screen.hidden) {
       const proj = projectAnchorToScreen(screenAnchor);
       if (proj) {
-        const cx = proj.x + screenAnchor.offsetX;
-        const cy = proj.y + screenAnchor.offsetY;
-        targetState.x = cx - targetState.width / 2;
-        targetState.y = cy - targetState.height / 2;
+        targetState.x = proj.x + screenAnchor.offsetX - targetState.width / 2;
+        targetState.y = proj.y + screenAnchor.offsetY - targetState.height / 2;
       }
-      // Si proj est null : ancre derrière la caméra → on laisse targetState tel quel,
-      // l'écran sort naturellement du champ. Il reviendra au même endroit au retour.
     }
 
-    // Menu VR
-    if (vrMode && menuAnchor && !vrMenu.hidden) {
-      const proj = projectAnchorToScreen(menuAnchor);
+    if (vrMode && taskbarAnchor && !vrTaskbar.hidden) {
+      const proj = projectAnchorToScreen(taskbarAnchor);
       if (proj) {
-        vrMenuTarget.x = proj.x + menuAnchor.offsetX - menuAnchor.width / 2;
-        vrMenuTarget.y = proj.y + menuAnchor.offsetY - menuAnchor.height / 2;
+        taskbarTarget.x = proj.x + taskbarAnchor.offsetX - taskbarAnchor.w / 2;
+        taskbarTarget.y = proj.y + taskbarAnchor.offsetY - taskbarAnchor.h / 2;
       }
     }
   }
 
   async function enableMotionAnchor() {
-    if (!window.DeviceOrientationEvent) {
-      setStatus('Capteurs indisponibles', '');
-      return;
-    }
+    if (!window.DeviceOrientationEvent) { setStatus('Capteurs indisponibles', ''); return; }
     try {
       if (typeof window.DeviceOrientationEvent.requestPermission === 'function') {
         const p = await window.DeviceOrientationEvent.requestPermission();
@@ -849,10 +977,10 @@
       motionEnabled = true;
       motionButton.classList.add('active');
       motionButton.textContent = '⌖ Réancrer';
-      setStatus('Ancrage 360° actif', 'active');
-      setHint('Visez l’endroit choisi, puis touchez « Réancrer ». L’écran reste ancré sur 360°.');
+      setStatus('Ancrage 360° actif (portrait + paysage)', 'active');
+      setHint('L’écran reste ancré au monde sur 360°, en portrait comme en paysage.');
       placeScreenAnchor();
-      if (vrMode) placeMenuAnchor();
+      if (vrMode) placeTaskbarAnchor();
     } catch {
       setStatus('Mouvement non autorisé', '');
     }
@@ -864,7 +992,7 @@
 
   function renderLoop() {
     if (!screen.hidden) applyScreen();
-    if (vrMode && !vrMenu.hidden) applyVrMenuPosition();
+    if (vrMode && !vrTaskbar.hidden) applyTaskbarPosition();
     requestAnimationFrame(renderLoop);
   }
 
@@ -878,6 +1006,14 @@
       targetState.x = clamp(targetState.x, 0, Math.max(0, innerWidth - targetState.width));
       targetState.y = clamp(targetState.y, 0, Math.max(0, innerHeight - targetState.height));
       applyScreen(true);
+    }
+    if (vrMode && !vrTaskbar.hidden) {
+      requestAnimationFrame(() => {
+        const r = vrTaskbar.getBoundingClientRect();
+        taskbarSize = { w: r.width, h: r.height };
+        applyTaskbarPosition(true);
+        placeTaskbarAnchor();
+      });
     }
   }
 
@@ -895,13 +1031,14 @@
   closeScreen.addEventListener('click', () => {
     screen.hidden = true;
     uploadedVideo.pause();
-    if (vrMode) toggleVRMode();
     setStatus('Écran fermé', 'ready');
   });
 
-  // Fallback tactile sur le menu VR
-  vrMenu.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', () => { if (vrMode) handleVrMenuAction(btn.dataset.vrAction); });
+  // Fallback tactile sur les boutons VR (au cas où le tracking main échoue)
+  vrTaskbar.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (vrMode) handleVrAction(btn.dataset.vrAction);
+    });
   });
 
   playBtn.addEventListener('click', () => {
@@ -918,8 +1055,22 @@
   screen.addEventListener('pointercancel', endPointer);
 
   addEventListener('resize', onResize);
-  addEventListener('orientationchange', () => setTimeout(onResize, 250));
+  addEventListener('orientationchange', () => {
+    setTimeout(() => {
+      onResize();
+      // Réancrer après rotation : les angles ont changé mais la cible monde est la même
+      // On repositionne l'ancre sur la position écran actuelle pour éviter un saut
+      if (motionEnabled) {
+        placeScreenAnchor();
+        if (vrMode) placeTaskbarAnchor();
+      }
+    }, 300);
+  });
   addEventListener('deviceorientation', onDeviceOrientation, true);
+  // iOS 13+ requiert une autorisation utilisateur ; on redemande au cas où
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    // déja géré dans enableMotionAnchor
+  }
 
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
