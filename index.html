@@ -24,6 +24,8 @@
     </section>
     <div class="scan-hud" id="scan-hud" hidden><span class="scan-dot"></span><span>SCAN 3D · PROFONDEUR RELATIVE</span></div>
 
+    <button class="orientation-pill" id="orientation-pill" type="button" title="Mode actuel — toucher pour réancrer">PORTRAIT</button>
+
     <section class="ar-screen" id="ar-screen" aria-label="Écran vidéo spatial" hidden>
       <header class="screen-bar" id="screen-bar">
         <span class="grab-dots" aria-hidden="true">⠿</span>
@@ -39,12 +41,21 @@
       <span class="screen-depth" id="anchor-label" aria-hidden="true">ÉCRAN FLOTTANT</span>
     </section>
 
-    <div class="vr-taskbar" id="vr-taskbar" hidden aria-label="Barre VR">
-      <button type="button" class="vr-btn" data-vr-action="reanchor" title="Réancrer">⌖</button>
-      <button type="button" class="vr-btn" data-vr-action="scan" title="Scan 3D">◌</button>
-      <button type="button" class="vr-btn" data-vr-action="play" title="Lecture/Pause">▶</button>
-      <button type="button" class="vr-btn" data-vr-action="close-screen" title="Fermer l’écran">✕</button>
-      <button type="button" class="vr-btn" data-vr-action="exit" title="Quitter VR">⏻</button>
+    <div class="vr-hud" id="vr-hud" hidden>
+      <div class="vr-taskbar main">
+        <button type="button" class="vr-btn" data-vr-action="reanchor" title="Réancrer">⌖</button>
+        <button type="button" class="vr-btn" data-vr-action="scan" title="Scan 3D">◌</button>
+        <button type="button" class="vr-btn" data-vr-action="play" title="Lecture/Pause">▶</button>
+        <button type="button" class="vr-btn" data-vr-action="close-screen" title="Fermer l’écran">✕</button>
+        <button type="button" class="vr-btn" data-vr-action="exit" title="Quitter VR">⏻</button>
+      </div>
+      <div class="vr-taskbar rot">
+        <button type="button" class="vr-btn" data-vr-action="yaw-" title="Pivoter à gauche">↺</button>
+        <button type="button" class="vr-btn" data-vr-action="yaw+" title="Pivoter à droite">↻</button>
+        <button type="button" class="vr-btn" data-vr-action="pitch+" title="Incliner vers le haut">▲</button>
+        <button type="button" class="vr-btn" data-vr-action="pitch-" title="Incliner vers le bas">▼</button>
+        <button type="button" class="vr-btn" data-vr-action="reset-rot" title="Réinitialiser rotation">⟲</button>
+      </div>
     </div>
 
     <canvas id="hand-canvas" width="1280" height="720" aria-hidden="true"></canvas>
