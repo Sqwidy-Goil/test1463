@@ -10,6 +10,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/fulltilt-ng@1.0.3/dist/fulltilt.min.js"></script>
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
   <script defer src="main.js"></script>
 </head>
 <body>
@@ -49,6 +50,45 @@
 
     <canvas id="game-canvas" aria-hidden="true"></canvas>
 
+    <!-- Clavier tactile -->
+    <div class="keyboard-panel" id="keyboard-panel" hidden>
+      <div class="kb-display" id="kb-display" contenteditable="true" spellcheck="false"></div>
+      <div class="kb-keys" id="kb-keys"></div>
+      <button class="kb-close" id="kb-close" type="button">✕</button>
+    </div>
+
+    <!-- App Photos -->
+    <div class="photos-app" id="photos-app" hidden>
+      <div class="photos-header">
+        <button id="photos-mode-photo" class="active">📷 Photo</button>
+        <button id="photos-mode-video">🎥 Vidéo</button>
+        <button id="photos-close">✕</button>
+      </div>
+      <div class="photos-gallery" id="photos-gallery"></div>
+      <button class="photos-shutter" id="photos-shutter" aria-label="Prendre une photo / Enregistrer"></button>
+    </div>
+
+    <!-- Modal AR (model-viewer) -->
+    <div class="ar-modal" id="ar-modal" hidden>
+      <div class="ar-modal-card">
+        <h2>🧊 Placer un écran 3D dans la pièce</h2>
+        <p>Sur iOS, AR Quick Look s'ouvre. Sur Android/Quest, WebXR prend le relais.</p>
+        <model-viewer
+          id="ar-model"
+          src="https://modelviewer.dev/shared-assets/models/Astronaut.glb"
+          ios-src="https://modelviewer.dev/shared-assets/models/Astronaut.usdz"
+          ar
+          ar-modes="webxr scene-viewer quick-look"
+          camera-controls
+          shadow-intensity="1"
+          style="width: 100%; height: 320px; border-radius: 14px;">
+        </model-viewer>
+        <div class="ar-modal-actions">
+          <button id="ar-modal-close" type="button">Fermer</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Spotify Modal -->
     <div class="spotify-modal" id="spotify-modal" hidden>
       <div class="spotify-card">
@@ -67,6 +107,9 @@
       <button type="button" class="vr-btn" data-vr-action="reanchor" title="Réancrer">⌖</button>
       <button type="button" class="vr-btn" data-vr-action="game" title="Jeu des sphères">🎮</button>
       <button type="button" class="vr-btn" data-vr-action="play" title="Lecture/Pause">▶</button>
+      <button type="button" class="vr-btn" data-vr-action="keyboard" title="Clavier">⌨️</button>
+      <button type="button" class="vr-btn" data-vr-action="photos" title="Photos">📸</button>
+      <button type="button" class="vr-btn" data-vr-action="ar" title="Placer en AR">🧊</button>
       <button type="button" class="vr-btn" data-vr-action="spotify" title="Spotify">🎵</button>
       <button type="button" class="vr-btn" data-vr-action="yaw-" title="Pivoter à gauche">↺</button>
       <button type="button" class="vr-btn" data-vr-action="yaw+" title="Pivoter à droite">↻</button>
