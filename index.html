@@ -9,6 +9,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/fulltilt-ng@1.0.3/dist/fulltilt.min.js"></script>
   <script defer src="main.js"></script>
 </head>
 <body>
@@ -48,10 +49,25 @@
 
     <canvas id="game-canvas" aria-hidden="true"></canvas>
 
+    <!-- Spotify Modal -->
+    <div class="spotify-modal" id="spotify-modal" hidden>
+      <div class="spotify-card">
+        <h2>🎵 Connecter Spotify</h2>
+        <p>Collez votre token d'accès Spotify (Premium requis).</p>
+        <input type="text" id="spotify-token" placeholder="BQD... (access token)" />
+        <p class="spotify-hint">Obtenez un token sur <a href="https://developer.spotify.com/dashboard" target="_blank">developer.spotify.com</a></p>
+        <div class="spotify-actions">
+          <button id="spotify-connect" type="button">Connecter</button>
+          <button id="spotify-cancel" type="button">Annuler</button>
+        </div>
+      </div>
+    </div>
+
     <div class="vr-taskbar" id="vr-taskbar" hidden aria-label="Barre VR">
       <button type="button" class="vr-btn" data-vr-action="reanchor" title="Réancrer">⌖</button>
       <button type="button" class="vr-btn" data-vr-action="game" title="Jeu des sphères">🎮</button>
       <button type="button" class="vr-btn" data-vr-action="play" title="Lecture/Pause">▶</button>
+      <button type="button" class="vr-btn" data-vr-action="spotify" title="Spotify">🎵</button>
       <button type="button" class="vr-btn" data-vr-action="yaw-" title="Pivoter à gauche">↺</button>
       <button type="button" class="vr-btn" data-vr-action="yaw+" title="Pivoter à droite">↻</button>
       <button type="button" class="vr-btn" data-vr-action="close-screen" title="Fermer l’écran">✕</button>
