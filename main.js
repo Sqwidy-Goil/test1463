@@ -36,17 +36,16 @@
   const vrButton = $('#vr-button');
   const vrTaskbar = $('#vr-taskbar');
   const orientationPill = $('#orientation-pill');
+  const gameBtn = vrTaskbar.querySelector('[data-vr-action="game"]');
 
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const minSize = { width: 220, height: 160 };
-  const SMOOTHING = reduceMotion ? 1 : 0.32;   // plus réactif (0.24 → 0.32)
-  const ROT_SMOOTH = reduceMotion ? 1 : 0.25;
+  const SMOOTHING = reduceMotion ? 1 : 0.32;
   const FOCAL_FACTOR = 0.85;
   const PERSPECTIVE = 1400;
   const ROT_STEP = 20;
 
-  // Pinch (ratio par rapport à la taille de la main) — robuste à la distance
   const PINCH_ENTER = 0.28;
   const PINCH_EXIT = 0.48;
 
@@ -82,7 +81,7 @@
   let scanActive = false, scanAnimation = 0, previousLuma = null, depthVertices = [], lastScanAt = 0;
 
   let lastFrameAt = 0, fps = 0, smoothPoint = null, lastHands = [], handLostSince = 0;
-  let pinchHeld = false, pinchJustEntered = false, pinchJustExited = false;
+  let pinchHeld = false, pinchJustEntered = false;
   let handsInstance = null, trackingLoop = null, usingRVFC = false;
 
   const scanSource = document.createElement('canvas');
@@ -156,10 +155,7 @@
     if (vCss[2] >= -0.05) return null;
     const depth = -vCss[2];
     const focal = innerWidth * FOCAL_FACTOR;
-    return {
-      x: innerWidth / 2 + (vCss[0] / depth) * focal,
-      y: innerHeight / 2 - (vCss[1] / depth) * focal
-    };
+    return { x: innerWidth / 2 + (vCss[0] / depth) * focal, y: innerHeight / 2 - (vCss[1] / depth) * focal };
   }
 
   /* ------------------------------------------------------------------ */
@@ -174,10 +170,7 @@
     applyScreen(true);
     placeScreenAnchor();
   }
-
-  function showScreen() {
-    if (screen.hidden) { screen.hidden = false; initialiseScreen(); }
-  }
+  function showScreen() { if (screen.hidden) { screen.hidden = false; initialiseScreen(); } }
 
   function applyScreen(snap = false) {
     const t = snap ? 1 : SMOOTHING;
@@ -193,10 +186,7 @@
   }
 
   function updateScreenRotation() {
-    if (!currentCssToWorld || !screenAnchor) {
-      screen.style.transform = `perspective(${PERSPECTIVE}px)`;
-      return;
-    }
+    if (!currentCssToWorld || !screenAnchor) { screen.style.transform = `perspective(${PERSPECTIVE}px)`; return; }
     const Ru = userRotation(screenUserYaw, 0);
     const view = matMul(matMul(matT(currentCssToWorld), screenAnchor.baseMatrix), Ru);
     const c0 = [view[0][0], view[1][0], view[2][0]];
@@ -349,7 +339,6 @@
     vrTaskbar.style.left = `${hudState.x.toFixed(1)}px`;
     vrTaskbar.style.top = `${hudState.y.toFixed(1)}px`;
   }
-
   function placeHudAnchor() {
     if (!motionEnabled || !currentCssToWorld || vrTaskbar.hidden) { hudAnchor = null; return; }
     const r = vrTaskbar.getBoundingClientRect();
@@ -361,7 +350,6 @@
     const vCss = [(cx - innerWidth / 2) / focal, -(cy - innerHeight / 2) / focal, -1];
     hudAnchor = { vWorld: matVec(currentCssToWorld, vCss), w: r.width, h: r.height };
   }
-
   function toggleVRMode() {
     vrMode = !vrMode;
     document.body.classList.toggle('vr-mode', vrMode);
@@ -378,24 +366,45 @@
       });
       if (!screen.hidden) placeScreenAnchor();
       setStatus('Mode VR — pincez un bouton pour cliquer', 'active');
-      setHint('Pointez un bouton avec l’index + pouce pour cliquer · Pincez la barre pour déplacer l’écran.');
+      setHint('Pointez un bouton avec l’index + pouce · Touchez 🎮 pour lancer le jeu de sphères.');
     } else {
       vrTaskbar.hidden = true;
       hudAnchor = null;
       menuClickLatch = false;
       if (hoveredBtn) { hoveredBtn.classList.remove('hovered'); hoveredBtn = null; }
+      // Stop game when leaving VR
+      if (gameActive) toggleGame();
       setStatus('Mode VR désactivé', 'ready');
       if (!screen.hidden) placeScreenAnchor();
     }
   }
 
   /* ------------------------------------------------------------------ */
-  /* Jeu des sphères                                                     */
+  /* Jeu des sphères — strictement lié au bouton 🎮                      */
   /* ------------------------------------------------------------------ */
 
   function toggleGame() {
-    if (gameActive) { gameActive = false; gameSpheres = []; gameHud.hidden = true; gameContext.clearRect(0, 0, gameCanvas.width, gameCanvas.height); setStatus('Jeu arrêté', 'ready'); }
-    else { gameActive = true; gameScore = 0; gameMissed = 0; gameSpheres = []; gameLastSpawn = 0; gameSpawnInterval = 1400; gameHud.hidden = false; gameScoreEl.textContent = '0'; gameMissedEl.textContent = '0'; setStatus('Jeu actif — touchez les sphères !', 'active'); }
+    gameActive = !gameActive;
+    if (gameActive) {
+      gameScore = 0;
+      gameMissed = 0;
+      gameSpheres = [];
+      gameLastSpawn = 0;
+      gameSpawnInterval = 1400;
+      gameHud.hidden = false;
+      gameScoreEl.textContent = '0';
+      gameMissedEl.textContent = '0';
+      gameBtn.classList.add('active');
+      setStatus('Jeu actif — touchez les sphères !', 'active');
+    } else {
+      gameSpheres = [];
+      gameHud.hidden = true;
+      gameBtn.classList.remove('active');
+      // Clear transform + canvas
+      gameContext.setTransform(1, 0, 0, 1, 0, 0);
+      gameContext.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+      setStatus('Jeu arrêté', 'ready');
+    }
   }
 
   function spawnSphere() {
@@ -405,9 +414,7 @@
       z: 1.0,
       speed: 0.0006 + Math.random() * 0.0005,
       hue: 180 + Math.random() * 130,
-      popped: false,
-      popProgress: 0,
-      missed: false
+      popped: false, popProgress: 0, missed: false
     };
   }
 
@@ -419,7 +426,9 @@
       gameSpawnInterval = Math.max(650, gameSpawnInterval - 12);
     }
     const hand = lastHands[0];
-    const handPts = hand && hand.landmarks ? [hand.landmarks[8], hand.landmarks[9], hand.landmarks[0]].map(lm => ({ x: lm.x * innerWidth, y: lm.y * innerHeight })) : [];
+    const handPts = hand && hand.landmarks
+      ? [hand.landmarks[8], hand.landmarks[9], hand.landmarks[0], hand.landmarks[12], hand.landmarks[16]].map(lm => ({ x: lm.x * innerWidth, y: lm.y * innerHeight }))
+      : [];
 
     for (let i = gameSpheres.length - 1; i >= 0; i--) {
       const s = gameSpheres[i];
@@ -436,7 +445,7 @@
         continue;
       }
       for (const hp of handPts) {
-        if (Math.hypot(hp.x - s.x, hp.y - s.y) < r * 0.85) {
+        if (Math.hypot(hp.x - s.x, hp.y - s.y) < r * 0.9) {
           s.popped = true; gameScore++; gameScoreEl.textContent = gameScore;
           break;
         }
@@ -483,7 +492,7 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* MAIN 3D beige — mesh ~110 faces                                     */
+  /* Main / pinch                                                        */
   /* ------------------------------------------------------------------ */
 
   function handData(lm, index) {
@@ -493,17 +502,13 @@
     const ratio = pinchD / span;
 
     pinchJustEntered = false;
-    pinchJustExited = false;
     if (!pinchHeld && ratio < PINCH_ENTER) { pinchHeld = true; pinchJustEntered = true; }
-    else if (pinchHeld && ratio > PINCH_EXIT) { pinchHeld = false; pinchJustExited = true; }
-
-    // Échelle normalisée : 1 = main "typique" ; adapte les épaisseurs de trait
-    const handScale = span / 0.12;
+    else if (pinchHeld && ratio > PINCH_EXIT) { pinchHeld = false; }
 
     return {
       index, raw, point: raw,
       depth: clamp(0.5 - (lm[8].z || 0) * 2.5, 0, 1),
-      pinch: pinchHeld, pinchRatio: ratio, handScale,
+      pinch: pinchHeld, pinchRatio: ratio,
       indexOpen: distance(lm[8], lm[0]) > distance(lm[6], lm[0]) * 1.16,
       landmarks: lm
     };
@@ -512,7 +517,6 @@
   function smoothCursor(raw) {
     if (!smoothPoint || !smoothCursor.last) smoothPoint = { ...raw };
     else {
-      // Adaptation dynamique : rapide = pas de lissage, lent = lissage
       const speed = Math.hypot(raw.x - smoothCursor.last.x, raw.y - smoothCursor.last.y);
       const t = reduceMotion ? 1 : clamp(0.55 + speed / 130, 0.55, 1);
       smoothPoint = { x: lerp(smoothPoint.x, raw.x, t), y: lerp(smoothPoint.y, raw.y, t) };
@@ -520,7 +524,6 @@
     smoothCursor.last = raw;
     return smoothPoint;
   }
-
   function showCursor(p, pinching, depth = 0.5) {
     cursor.style.left = `${p.x.toFixed(1)}px`;
     cursor.style.top = `${p.y.toFixed(1)}px`;
@@ -529,158 +532,185 @@
     cursor.classList.toggle('pinching', pinching);
   }
 
-  /* --- Mesh 3D articulée ~110 faces --- */
+  /* --- AURA gris-bleu transparente qui épouse main + bras --- */
 
   const FINGER_CHAINS = [
-    { idx: [17, 18, 19, 20], wm: 0.78 }, // auriculaire
-    { idx: [13, 14, 15, 16], wm: 0.92 }, // annulaire
-    { idx: [9, 10, 11, 12],  wm: 1.05 }, // majeur
-    { idx: [5, 6, 7, 8],     wm: 1.00 }, // index
-    { idx: [1, 2, 3, 4],     wm: 1.15 }  // pouce
+    { idx: [17, 18, 19, 20], wm: 0.78 },
+    { idx: [13, 14, 15, 16], wm: 0.92 },
+    { idx: [9, 10, 11, 12],  wm: 1.05 },
+    { idx: [5, 6, 7, 8],     wm: 1.00 },
+    { idx: [1, 2, 3, 4],     wm: 1.15 }
   ];
-  const SUBDIV = 3; // subdiviser chaque segment en 3 → ~18 faces/doigt
 
-  function draw3DHand(lm) {
+  const AURA_COLOR = { r: 155, g: 185, b: 225 }; // gris-bleu
+
+  function drawHandAura(lm) {
     const W = handCanvas.width, H = handCanvas.height;
     const pts = lm.map(p => ({
       x: p.x * W, y: p.y * H,
       depth: clamp(0.5 - (p.z || 0) * 2.5, 0, 1)
     }));
-    const scaleFactor = Math.hypot(pts[5].x - pts[17].x, pts[5].y - pts[17].y) / (W * 0.15);
 
-    const faces = [];
-    FINGER_CHAINS.forEach(c => buildFingerFaces(pts, c.idx, c.wm * scaleFactor, faces));
-    buildPalmFaces(pts, faces);
+    // Échelle adaptée à la taille réelle de la main
+    const spanW = Math.hypot(pts[5].x - pts[17].x, pts[5].y - pts[17].y);
+    const scale = clamp(spanW / (W * 0.10), 0.35, 2.5);
 
-    // Ombre globale derrière
-    handContext.save();
-    handContext.translate(scaleFactor * 4, scaleFactor * 6);
-    handContext.filter = 'blur(8px)';
-    handContext.fillStyle = 'rgba(50, 30, 15, 0.45)';
-    drawFacesSolid(faces, true);
-    handContext.restore();
-    handContext.filter = 'none';
+    // Bras (derrière la main) — extrapolé du poignet
+    drawArmAura(pts, scale);
 
-    // Faces beiges avec ombrage par face
-    drawFacesShaded(faces, scaleFactor);
+    // Aura : 3 passes de halo + 1 contour lumineux
+    drawAuraLayer(pts, scale, 0.06, 25);
+    drawAuraLayer(pts, scale, 0.14, 12);
+    drawAuraLayer(pts, scale, 0.28, 4);
+
+    // Reflet central sur la paume
+    drawPalmGlint(pts, scale);
+
+    // Contour clair (edge highlight)
+    drawAuraContour(pts, scale);
   }
 
-  function buildFingerFaces(pts, chain, wm, faces) {
-    const nodes = [];
-    const jointWidths = chain.map((idx, i) => {
-      const t = i / (chain.length - 1);
-      const p = pts[idx];
-      return Math.max(1.5, (7 - t * 3 + p.depth * 4) * wm * 0.5);
+  function drawAuraLayer(pts, scale, alpha, blurPx) {
+    handContext.save();
+    handContext.shadowColor = `rgba(${AURA_COLOR.r}, ${AURA_COLOR.g}, ${AURA_COLOR.b}, ${alpha * 1.6})`;
+    handContext.shadowBlur = blurPx * scale;
+    handContext.fillStyle = `rgba(${AURA_COLOR.r}, ${AURA_COLOR.g}, ${AURA_COLOR.b}, ${alpha})`;
+    handContext.strokeStyle = `rgba(${AURA_COLOR.r}, ${AURA_COLOR.g}, ${AURA_COLOR.b}, ${alpha})`;
+    strokeHandSilhouette(pts, scale);
+    handContext.restore();
+  }
+
+  function strokeHandSilhouette(pts, scale) {
+    handContext.lineCap = 'round';
+    handContext.lineJoin = 'round';
+
+    // Doigts (segments indépendants avec round cap = jonctions lisses)
+    FINGER_CHAINS.forEach(c => {
+      for (let i = 0; i < c.idx.length - 1; i++) {
+        const a = pts[c.idx[i]];
+        const b = pts[c.idx[i + 1]];
+        const segT = i / (c.idx.length - 2);
+        const w = (11 - segT * 4 + ((a.depth + b.depth) / 2) * 6) * c.wm * scale;
+        handContext.beginPath();
+        handContext.lineWidth = w;
+        handContext.moveTo(a.x, a.y);
+        handContext.lineTo(b.x, b.y);
+        handContext.stroke();
+      }
     });
 
-    for (let i = 0; i < chain.length - 1; i++) {
-      const a = pts[chain[i]], b = pts[chain[i + 1]];
-      const wa = jointWidths[i], wb = jointWidths[i + 1];
-      for (let s = 0; s < SUBDIV; s++) {
-        const t = s / SUBDIV;
-        nodes.push({
-          x: a.x + (b.x - a.x) * t,
-          y: a.y + (b.y - a.y) * t,
-          depth: a.depth + (b.depth - a.depth) * t,
-          w: wa + (wb - wa) * t
-        });
-      }
-    }
-    const lastIdx = chain[chain.length - 1];
-    nodes.push({ x: pts[lastIdx].x, y: pts[lastIdx].y, depth: pts[lastIdx].depth, w: jointWidths[jointWidths.length - 1] });
-
-    for (let i = 0; i < nodes.length - 1; i++) {
-      const a = nodes[i], b = nodes[i + 1];
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const len = Math.hypot(dx, dy) || 1;
-      const px = -dy / len, py = dx / len;
-      const aL = { x: a.x + px * a.w, y: a.y + py * a.w, depth: a.depth };
-      const aR = { x: a.x - px * a.w, y: a.y - py * a.w, depth: a.depth };
-      const bL = { x: b.x + px * b.w, y: b.y + py * b.w, depth: b.depth };
-      const bR = { x: b.x - px * b.w, y: b.y - py * b.w, depth: b.depth };
-      faces.push({ v: [aL, aR, bL], depth: (aL.depth + aR.depth + bL.depth) / 3 });
-      faces.push({ v: [aR, bL, bR], depth: (aR.depth + bL.depth + bR.depth) / 3 });
-    }
-
-    // Bout arrondi
-    const last = nodes[nodes.length - 1];
-    const prev = nodes[nodes.length - 2];
-    const dx = last.x - prev.x, dy = last.y - prev.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const dirX = dx / len, dirY = dy / len;
-    const px = -dirY, py = dirX;
-    const far = { x: last.x + dirX * last.w * 1.3, y: last.y + dirY * last.w * 1.3, depth: last.depth };
-    const left = { x: last.x + px * last.w, y: last.y + py * last.w, depth: last.depth };
-    const right = { x: last.x - px * last.w, y: last.y - py * last.w, depth: last.depth };
-    faces.push({ v: [left, far, last], depth: last.depth });
-    faces.push({ v: [far, right, last], depth: last.depth });
-    faces.push({ v: [left, right, far], depth: last.depth });
-  }
-
-  function buildPalmFaces(pts, faces) {
-    const p0 = pts[0], p1 = pts[1], p5 = pts[5], p9 = pts[9], p13 = pts[13], p17 = pts[17];
-    const cx = (p0.x + p5.x + p9.x + p13.x + p17.x) / 5;
-    const cy = (p0.y + p5.y + p9.y + p13.y + p17.y) / 5;
-    const cd = (p0.depth + p5.depth + p9.depth + p13.depth + p17.depth) / 5;
-    const center = { x: cx, y: cy, depth: cd };
-
-    const perimeter = [p0, p1, p5, p9, p13, p17];
-    for (let i = 0; i < perimeter.length; i++) {
-      const a = perimeter[i];
-      const b = perimeter[(i + 1) % perimeter.length];
-      faces.push({ v: [center, a, b], depth: (cd + a.depth + b.depth) / 3 });
-      faces.push({ v: [center, b, a], depth: (cd + a.depth + b.depth) / 3 });
-    }
-  }
-
-  function drawFacesSolid(faces) {
-    handContext.beginPath();
-    for (const f of faces) {
-      const [a, b, c] = f.v;
-      handContext.moveTo(a.x, a.y);
-      handContext.lineTo(b.x, b.y);
-      handContext.lineTo(c.x, c.y);
-      handContext.closePath();
-    }
+    // Paume (silhouette fermée)
+    drawPalmPath(pts);
     handContext.fill();
   }
 
-  function drawFacesShaded(faces, scaleFactor) {
-    const lw = Math.max(0.4, 0.6 * scaleFactor);
-    // Base skin
-    const R0 = 210, G0 = 170, B0 = 135;
-    const edgeColor = 'rgba(120, 75, 45, 0.32)';
-
-    for (const f of faces) {
-      const [a, b, c] = f.v;
-      const t = f.depth;
-      // Lumière simulée : plus clair en haut-gauche
-      const avgX = (a.x + b.x + c.x) / 3;
-      const avgY = (a.y + b.y + c.y) / 3;
-      const H = handCanvas.height;
-      const shade = 0.78 + (1 - avgX / handCanvas.width) * 0.14 + (1 - avgY / H) * 0.14;
-
-      const r = Math.round((R0 - 30 + t * 55) * shade);
-      const g = Math.round((G0 - 25 + t * 45) * shade);
-      const bl = Math.round((B0 - 20 + t * 40) * shade);
-
-      handContext.beginPath();
-      handContext.moveTo(a.x, a.y);
-      handContext.lineTo(b.x, b.y);
-      handContext.lineTo(c.x, c.y);
-      handContext.closePath();
-      handContext.fillStyle = `rgb(${r}, ${g}, ${bl})`;
-      handContext.fill();
-      handContext.strokeStyle = edgeColor;
-      handContext.lineWidth = lw;
-      handContext.stroke();
-    }
-
-    // Reflet global
-    const p0 = [faces[0].v[0].x, faces[0].v[0].y];
-    handContext.fillStyle = 'rgba(255, 250, 240, 0.12)';
+  function drawPalmPath(pts) {
+    const p0 = pts[0], p1 = pts[1], p2 = pts[2], p5 = pts[5], p9 = pts[9], p13 = pts[13], p17 = pts[17];
     handContext.beginPath();
-    handContext.ellipse(p0[0] + 20, p0[1] - 20, 40 * scaleFactor, 30 * scaleFactor, -0.4, 0, Math.PI * 2);
+    handContext.moveTo(p0.x, p0.y);
+    handContext.lineTo(p1.x, p1.y);
+    handContext.lineTo(p2.x, p2.y);
+    const web1 = { x: (p2.x + p5.x) * 0.5, y: (p2.y + p5.y) * 0.5 };
+    handContext.quadraticCurveTo(web1.x, web1.y, p5.x, p5.y);
+    handContext.lineTo(p9.x, p9.y);
+    handContext.lineTo(p13.x, p13.y);
+    handContext.lineTo(p17.x, p17.y);
+    const edge = { x: (p17.x + p0.x) * 0.5, y: (p17.y + p0.y) * 0.5 };
+    handContext.quadraticCurveTo(edge.x, edge.y, p0.x, p0.y);
+    handContext.closePath();
+  }
+
+  function drawPalmGlint(pts, scale) {
+    const cx = (pts[0].x + pts[5].x + pts[9].x + pts[13].x + pts[17].x) / 5;
+    const cy = (pts[0].y + pts[5].y + pts[9].y + pts[13].y + pts[17].y) / 5;
+    const r = Math.hypot(pts[5].x - pts[17].x, pts[5].y - pts[17].y) * 0.7;
+    if (r < 2) return;
+    const grad = handContext.createRadialGradient(cx - r*0.2, cy - r*0.2, 0.5, cx, cy, r);
+    grad.addColorStop(0, `rgba(220, 235, 255, ${0.22})`);
+    grad.addColorStop(0.5, `rgba(190, 215, 245, ${0.10})`);
+    grad.addColorStop(1, `rgba(190, 215, 245, 0)`);
+    handContext.fillStyle = grad;
+    handContext.beginPath();
+    handContext.arc(cx, cy, r, 0, Math.PI * 2);
+    handContext.fill();
+  }
+
+  function drawAuraContour(pts, scale) {
+    handContext.save();
+    handContext.shadowColor = 'rgba(220, 235, 255, 0.55)';
+    handContext.shadowBlur = 8 * scale;
+    handContext.strokeStyle = 'rgba(220, 235, 255, 0.35)';
+    handContext.lineWidth = Math.max(0.8, 1.5 * scale);
+    handContext.lineCap = 'round';
+    handContext.lineJoin = 'round';
+
+    // Contour des doigts
+    FINGER_CHAINS.forEach(c => {
+      for (let i = 0; i < c.idx.length - 1; i++) {
+        const a = pts[c.idx[i]];
+        const b = pts[c.idx[i + 1]];
+        handContext.beginPath();
+        handContext.moveTo(a.x, a.y);
+        handContext.lineTo(b.x, b.y);
+        handContext.stroke();
+      }
+    });
+    // Contour de la paume
+    drawPalmPath(pts);
+    handContext.stroke();
+    handContext.restore();
+  }
+
+  /* --- Bras extrapolé --- */
+
+  function drawArmAura(pts, scale) {
+    const wrist = pts[0];
+    const palmCx = (pts[0].x + pts[5].x + pts[9].x + pts[13].x + pts[17].x) / 5;
+    const palmCy = (pts[0].y + pts[5].y + pts[9].y + pts[13].y + pts[17].y) / 5;
+    let dx = wrist.x - palmCx;
+    let dy = wrist.y - palmCy;
+    const len = Math.hypot(dx, dy);
+    if (len < 1) return;
+    dx /= len; dy /= len;
+    const perpX = -dy, perpY = dx;
+
+    const spanW = Math.hypot(pts[5].x - pts[17].x, pts[5].y - pts[17].y);
+    const armLen = spanW * 3.2;
+    const wWrist = spanW * 0.55;
+    const wEnd = spanW * 0.82;
+
+    const sL = { x: wrist.x + perpX * wWrist * 0.5, y: wrist.y + perpY * wWrist * 0.5 };
+    const sR = { x: wrist.x - perpX * wWrist * 0.5, y: wrist.y - perpY * wWrist * 0.5 };
+    const eL = { x: wrist.x + dx * armLen + perpX * wEnd * 0.5, y: wrist.y + dy * armLen + perpY * wEnd * 0.5 };
+    const eR = { x: wrist.x + dx * armLen - perpX * wEnd * 0.5, y: wrist.y + dy * armLen - perpY * wEnd * 0.5 };
+
+    const grad = handContext.createLinearGradient(wrist.x, wrist.y, wrist.x + dx * armLen, wrist.y + dy * armLen);
+    grad.addColorStop(0, `rgba(${AURA_COLOR.r}, ${AURA_COLOR.g}, ${AURA_COLOR.b}, 0.32)`);
+    grad.addColorStop(0.35, `rgba(${AURA_COLOR.r}, ${AURA_COLOR.g}, ${AURA_COLOR.b}, 0.16)`);
+    grad.addColorStop(1, `rgba(${AURA_COLOR.r}, ${AURA_COLOR.g}, ${AURA_COLOR.b}, 0)`);
+
+    // Halo
+    handContext.save();
+    handContext.shadowColor = `rgba(${AURA_COLOR.r}, ${AURA_COLOR.g}, ${AURA_COLOR.b}, 0.22)`;
+    handContext.shadowBlur = 20 * scale;
+    handContext.fillStyle = grad;
+    handContext.beginPath();
+    handContext.moveTo(sL.x, sL.y);
+    handContext.lineTo(eL.x, eL.y);
+    handContext.lineTo(eR.x, eR.y);
+    handContext.lineTo(sR.x, sR.y);
+    handContext.closePath();
+    handContext.fill();
+    handContext.restore();
+
+    // Core
+    handContext.fillStyle = grad;
+    handContext.beginPath();
+    handContext.moveTo(sL.x, sL.y);
+    handContext.lineTo(eL.x, eL.y);
+    handContext.lineTo(eR.x, eR.y);
+    handContext.lineTo(sR.x, sR.y);
+    handContext.closePath();
     handContext.fill();
   }
 
@@ -768,7 +798,7 @@
 
     if (!list.length) {
       if (!handLostSince) handLostSince = now;
-      if (now - handLostSince > 100) {   // était 120ms
+      if (now - handLostSince > 100) {
         cursor.classList.remove('visible');
         smoothCursor.last = null;
         pinchHeld = false;
@@ -784,7 +814,7 @@
     handLostSince = 0;
 
     lastHands = list.map((lm, i) => handData(lm, i));
-    lastHands.forEach(h => draw3DHand(h.landmarks));
+    lastHands.forEach(h => drawHandAura(h.landmarks));
 
     const primary = lastHands[0];
     const point = smoothCursor(primary.raw);
@@ -834,7 +864,7 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* Caméra arrière                                                      */
+  /* Caméra                                                              */
   /* ------------------------------------------------------------------ */
 
   function stopStream(s) { s?.getTracks().forEach(t => t.stop()); }
@@ -869,7 +899,6 @@
     throw new Error('rear-camera-unavailable');
   }
   async function requestRearCamera() {
-    // Résolution plus basse = moins de latence / meilleur fps
     const base = { width: { ideal: 640 }, height: { ideal: 480 } };
     if (cameraVideo.dataset.deviceId) {
       try { const s = await openDevice(cameraVideo.dataset.deviceId, base); if (!isFront(s)) return s; stopStream(s); } catch {}
@@ -915,12 +944,9 @@
     }
   }
 
-  /* --- Tracking basse latence via requestVideoFrameCallback --- */
-
   function startHandTracking() {
     if (handsInstance || typeof Hands === 'undefined') return;
     handsInstance = new Hands({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
-    // modelComplexity 0 = modèle léger = ~2× plus rapide, latence minimale
     handsInstance.setOptions({
       maxNumHands: 2,
       modelComplexity: 0,
@@ -938,12 +964,8 @@
       schedule();
     };
     const schedule = () => {
-      if (usingRVFC) {
-        cameraVideo.requestVideoFrameCallback(loop);
-        trackingLoop = null;
-      } else {
-        trackingLoop = requestAnimationFrame(loop);
-      }
+      if (usingRVFC) { cameraVideo.requestVideoFrameCallback(loop); trackingLoop = null; }
+      else { trackingLoop = requestAnimationFrame(loop); }
     };
     schedule();
   }
@@ -958,8 +980,7 @@
     const screenAngle = getScreenAngle();
     currentCssToWorld = cssToWorld(a, event.beta, event.gamma || 0, screenAngle);
     currentScreenAngle = screenAngle;
-    const isLandscape = screenAngle === 90 || screenAngle === 270;
-    orientationPill.textContent = isLandscape ? 'PAYSAGE' : 'PORTRAIT';
+    orientationPill.textContent = (screenAngle === 90 || screenAngle === 270) ? 'PAYSAGE' : 'PORTRAIT';
     updateAnchors();
   }
 
@@ -1010,7 +1031,7 @@
   }
 
   /* ------------------------------------------------------------------ */
-  /* Boucle de rendu                                                     */
+  /* Boucle                                                              */
   /* ------------------------------------------------------------------ */
 
   function renderLoop() {
