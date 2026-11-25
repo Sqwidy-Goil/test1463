@@ -84,6 +84,54 @@ jobs:
           path: build/TestResults.xcresult
           retention-days: 14
 
+  unsigned-archive:
+    name: Unsigned device IPA
+    if: vars.IOS_SIGNING_ENABLED != 'true'
+    needs: simulator
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_16.4.app
+          xcodebuild -version
+
+      - name: Build unsigned device archive
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          xcodebuild archive \
+            -project VISI0NSpatial.xcodeproj \
+            -scheme VISI0NSpatial \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath build/VISI0NSpatial-unsigned.xcarchive \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            DEVELOPMENT_TEAM=""
+
+      - name: Package IPA
+        run: |
+          set -euo pipefail
+          app_path="build/VISI0NSpatial-unsigned.xcarchive/Products/Applications/VISI0NSpatial.app"
+          test -d "$app_path"
+          mkdir -p build/unsigned-ipa/Payload
+          cp -R "$app_path" build/unsigned-ipa/Payload/
+          (cd build/unsigned-ipa && zip -q -r ../VISI0NSpatial-unsigned.ipa Payload)
+          unzip -l build/VISI0NSpatial-unsigned.ipa | grep -q 'Payload/VISI0NSpatial.app/Info.plist'
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: VISI0NSpatial-ipa
+          path: build/VISI0NSpatial-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30
+
   signed-archive:
     name: Signed archive and IPA
     if: vars.IOS_SIGNING_ENABLED == 'true'
