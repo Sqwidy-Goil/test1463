@@ -47,7 +47,7 @@ jobs:
   simulator:
     name: Swift, Metal, unit and UI tests
     runs-on: macos-15
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,6 +56,11 @@ jobs:
         run: |
           sudo xcode-select --switch /Applications/Xcode_16.4.app
           xcodebuild -version
+
+      - name: Download iOS Simulator runtime
+        run: |
+          xcodebuild -downloadPlatform iOS
+          xcrun simctl list devices available
 
       - name: Validate project references
         run: node scripts/validate-native-project.cjs
@@ -87,7 +92,6 @@ jobs:
   unsigned-archive:
     name: Unsigned device IPA
     if: vars.IOS_SIGNING_ENABLED != 'true'
-    needs: simulator
     runs-on: macos-15
     timeout-minutes: 40
     steps:
