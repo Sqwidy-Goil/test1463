@@ -1,6 +1,20 @@
 import Foundation
 import Combine
 
+private struct AppSettingsSnapshot: Codable {
+    var ipdMillimeters: Double
+    var viewingDistance: Double
+    var fieldOfView: Double
+    var lensDistortion: Double
+    var motionSensitivity: Double
+    var motionEnabled: Bool
+    var cameraEnabled: Bool
+    var handTrackingEnabled: Bool
+    var showPerformance: Bool
+    var environmentKind: EnvironmentKind
+    var panoramaFileName: String?
+}
+
 @MainActor
 final class AppSettings: ObservableObject {
     @Published var ipdMillimeters: Double { didSet { persist() } }
@@ -32,7 +46,7 @@ final class AppSettings: ObservableObject {
         panoramaFileName = nil
 
         guard let data = defaults.data(forKey: defaultsKey),
-              let saved = try? JSONDecoder().decode(Self.self, from: data) else { return }
+              let saved = try? JSONDecoder().decode(AppSettingsSnapshot.self, from: data) else { return }
         ipdMillimeters = saved.ipdMillimeters
         viewingDistance = saved.viewingDistance
         fieldOfView = saved.fieldOfView
@@ -59,7 +73,20 @@ final class AppSettings: ObservableObject {
     }
 
     private func persist() {
-        guard let data = try? JSONEncoder().encode(self) else { return }
+        let snapshot = AppSettingsSnapshot(
+            ipdMillimeters: ipdMillimeters,
+            viewingDistance: viewingDistance,
+            fieldOfView: fieldOfView,
+            lensDistortion: lensDistortion,
+            motionSensitivity: motionSensitivity,
+            motionEnabled: motionEnabled,
+            cameraEnabled: cameraEnabled,
+            handTrackingEnabled: handTrackingEnabled,
+            showPerformance: showPerformance,
+            environmentKind: environmentKind,
+            panoramaFileName: panoramaFileName
+        )
+        guard let data = try? JSONEncoder().encode(snapshot) else { return }
         UserDefaults.standard.set(data, forKey: defaultsKey)
     }
 }

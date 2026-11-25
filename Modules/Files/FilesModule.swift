@@ -56,8 +56,8 @@ struct FilesModuleView: View {
                     _ = try DocumentStore.shared.importItem(url)
                     reload()
                     coordinator.showMessage("File imported.")
-                } catch { error = error.localizedDescription }
-            case .failure(let failure): error = failure.localizedDescription
+                } catch { self.error = error.localizedDescription }
+            case .failure(let failure): self.error = failure.localizedDescription
             }
         }
         .onAppear(perform: reload)
@@ -73,7 +73,7 @@ struct FilesModuleView: View {
     }
 
     private func reload() {
-        do { files = try DocumentStore.shared.documents() } catch { error = error.localizedDescription }
+        do { files = try DocumentStore.shared.documents() } catch { self.error = error.localizedDescription }
     }
 
     private func symbol(for url: URL) -> String {

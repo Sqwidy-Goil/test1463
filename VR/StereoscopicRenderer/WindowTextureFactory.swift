@@ -105,7 +105,7 @@ enum WindowTextureFactory {
 
     static func image(for window: SpatialWindow, status: String? = nil) -> UIImage {
         let layout = Layout(size: window.placement.size)
-        return render(size: window.placement.size, minimized: window.lifecycle == .minimized) { _, size in
+        return render(size: window.placement.size, minimized: window.lifecycle == .minimized) { context, size in
             let palette = Palette(module: window.module)
             let outer = roundedRect(CGRect(origin: .zero, size: size), radius: layout.corner)
             context.saveGState()

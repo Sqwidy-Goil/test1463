@@ -128,7 +128,7 @@ final class CameraService: NSObject, ObservableObject, AVCaptureVideoDataOutputS
                         case .success(let data):
                             do {
                                 url = try DocumentStore.shared.write(data, to: "VISI0N-\(UUID().uuidString).jpg")
-                                lastCaptureURL = url
+                                self.lastCaptureURL = url
                             } catch {
                                 url = nil
                             }
@@ -167,9 +167,6 @@ final class CameraService: NSObject, ObservableObject, AVCaptureVideoDataOutputS
             session.addOutput(videoOutput)
             if let connection = videoOutput.connection(with: .video) {
                 connection.videoOrientation = .landscapeRight
-                if connection.isVideoMinFrameDurationSupported {
-                    connection.videoMinFrameDuration = CMTime(value: 1, timescale: 15)
-                }
             }
 
             if session.canAddOutput(photoOutput) {

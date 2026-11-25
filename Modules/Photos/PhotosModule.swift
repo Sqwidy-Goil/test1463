@@ -70,9 +70,9 @@ struct PhotosModuleView: View {
         for result in selection where result.itemProvider.canLoadObject(ofClass: UIImage.self) {
             result.itemProvider.loadObject(ofClass: UIImage.self) { object, failure in
                 if let image = object as? UIImage {
-                    DispatchQueue.main.async { images.append(image) }
+                    DispatchQueue.main.async { self.images.append(image) }
                 } else if let failure {
-                    DispatchQueue.main.async { error = failure.localizedDescription }
+                    DispatchQueue.main.async { self.error = failure.localizedDescription }
                 }
             }
         }
@@ -90,7 +90,7 @@ struct PhotosModuleView: View {
             coordinator.settings.environmentKind = .panorama
             coordinator.showMessage("Panoramic environment applied.")
         } catch {
-            error = error.localizedDescription
+            self.error = error.localizedDescription
         }
     }
 }

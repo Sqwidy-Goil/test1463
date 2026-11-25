@@ -28,7 +28,7 @@ struct StereoCameraRig {
         let position = SIMD3<Float>(eye.offset * interpupillaryDistance, 0, 0)
         let view = simd_float4x4(orientation) * SpatialMath.translation(-position)
         let projection = Self.perspective(fieldOfView: fieldOfView, aspect: aspect, near: near, far: far)
-        return StereoEyeCamera(position: position, view: view, projection: projection, viewProjection: projection * view)
+        return StereoEyeCamera(position: position, view: view, projection: projection)
     }
 
     static func perspective(fieldOfView: Float, aspect: Float, near: Float, far: Float) -> simd_float4x4 {

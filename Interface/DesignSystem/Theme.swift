@@ -87,7 +87,9 @@ extension View {
     }
 }
 
+@MainActor
 struct PrimaryButtonStyle: ButtonStyle {
+    @MainActor
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(Typography.headline)
@@ -103,7 +105,9 @@ struct PrimaryButtonStyle: ButtonStyle {
     }
 }
 
+@MainActor
 struct QuietButtonStyle: ButtonStyle {
+    @MainActor
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(Typography.headline)

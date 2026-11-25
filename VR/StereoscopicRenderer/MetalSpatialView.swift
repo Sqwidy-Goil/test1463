@@ -134,7 +134,7 @@ struct MetalSpatialView: UIViewRepresentable {
             view.delegate = self
             do {
                 guard let device = view.device ?? MTLCreateSystemDefaultDevice() else {
-                onError?.("Metal is not available on this device.")
+                onError?("Metal is not available on this device.")
                 return
             }
             renderer = try StereoscopicRenderer(device: device)

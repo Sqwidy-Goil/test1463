@@ -1,6 +1,8 @@
 import Foundation
 import Metal
+import MetalKit
 import QuartzCore
+import SwiftUI
 import UIKit
 import simd
 
@@ -49,6 +51,7 @@ enum WindowHitAction {
     case body
 }
 
+@MainActor
 final class StereoscopicRenderer {
     let device: MTLDevice
 
@@ -198,8 +201,8 @@ final class StereoscopicRenderer {
             passDescriptor.depthAttachment.clearDepth = 1
 
             guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor) else { continue }
-            encoder.setViewport(MTLViewport(originX: 0, originY: 0, width: Double(target.size.width), height: Double(target.size.height), znear: 0, zfar: 1))
-            let aspect = Float(target.size.width / max(target.size.height, 1))
+            encoder.setViewport(MTLViewport(originX: 0, originY: 0, width: Double(targets.size.width), height: Double(targets.size.height), znear: 0, zfar: 1))
+            let aspect = Float(targets.size.width / max(targets.size.height, 1))
             let camera = rig.camera(eye, aspect: aspect, fieldOfView: fov)
             let worldCameraPosition = smoothedOrientation.act(camera.position)
             var background = BackgroundUniforms(
@@ -212,14 +215,14 @@ final class StereoscopicRenderer {
             encoder.setRenderPipelineState(backgroundPipeline)
             encoder.setFragmentBytes(&background, length: MemoryLayout<BackgroundUniforms>.stride, index: 0)
             encoder.setFragmentTexture(panoramaTexture, index: 0)
-            encoder.setFragmentSampler(sampler, index: 0)
-            encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+            encoder.setFragmentSamplerState(sampler, index: 0)
+            encoder.drawPrimitives(type: MTLPrimitiveType.triangle, vertexStart: 0, vertexCount: 3)
             drawCalls += 1
 
             encoder.setDepthStencilState(depthState)
             encoder.setRenderPipelineState(windowPipeline)
             encoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
-            encoder.setFragmentSampler(sampler, index: 0)
+            encoder.setFragmentSamplerState(sampler, index: 0)
 
             for window in orderedWindows {
                 guard let content = windowTextures[window.id] else { continue }
@@ -233,7 +236,7 @@ final class StereoscopicRenderer {
                 encoder.setVertexBytes(&uniforms, length: MemoryLayout<WindowUniforms>.stride, index: 1)
                 encoder.setFragmentBytes(&uniforms, length: MemoryLayout<WindowUniforms>.stride, index: 0)
                 encoder.setFragmentTexture(content, index: 0)
-                encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+                encoder.drawPrimitives(type: MTLPrimitiveType.triangle, vertexStart: 0, vertexCount: 6)
                 drawCalls += 1
             }
             encoder.endEncoding()
@@ -246,8 +249,8 @@ final class StereoscopicRenderer {
         finalEncoder.setFragmentBytes(&post, length: MemoryLayout<PostUniforms>.stride, index: 0)
         finalEncoder.setFragmentTexture(targets.left.color, index: 0)
         finalEncoder.setFragmentTexture(targets.right.color, index: 1)
-        finalEncoder.setFragmentSampler(sampler, index: 0)
-        finalEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+        finalEncoder.setFragmentSamplerState(sampler, index: 0)
+        finalEncoder.drawPrimitives(type: MTLPrimitiveType.triangle, vertexStart: 0, vertexCount: 3)
         finalEncoder.endEncoding()
         drawCalls += 1
 
@@ -296,7 +299,7 @@ final class StereoscopicRenderer {
         let distanceScale: Float = window.positioning == .worldLocked ? 1 : Float(settings.viewingDistance / 3.4)
         guard distanceScale != 1 else { return model }
         var columns = model.columns
-        columns.3 = SIMD4<Float>(columns.3.xyz * distanceScale, columns.3.w)
+        columns.3 = SIMD4<Float>(SIMD3<Float>(columns.3.x, columns.3.y, columns.3.z) * distanceScale, columns.3.w)
         return simd_float4x4(columns: columns)
     }
 
@@ -376,12 +379,12 @@ final class StereoscopicRenderer {
         }
     }
 
-    private static func color(_ color: UIColor) -> SIMD4<Float> {
+    private static func color(_ color: Color) -> SIMD4<Float> {
         var red: CGFloat = 0
         var green: CGFloat = 0
         var blue: CGFloat = 0
         var alpha: CGFloat = 1
-        color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        UIColor(color).getRed(&red, green: &green, blue: &blue, alpha: &alpha)
         return SIMD4<Float>(Float(red), Float(green), Float(blue), Float(alpha))
     }
 

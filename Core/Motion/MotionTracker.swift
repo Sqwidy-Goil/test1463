@@ -29,30 +29,29 @@ final class MotionTracker: NSObject, ObservableObject {
         guard !manager.isDeviceMotionActive else { return }
         status = .running
         manager.deviceMotionUpdateInterval = 1.0 / 90.0
-        manager.showsMovementRecorder = false
         manager.startDeviceMotionUpdates(using: .xArbitraryCorrectedZVertical, to: .main) { [weak self] motion, error in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 if let error {
-                    status = .failed(error.localizedDescription)
+                    self.status = .failed(error.localizedDescription)
                     return
                 }
                 guard let motion else {
-                    status = .interrupted
+                    self.status = .interrupted
                     return
                 }
                 let q = motion.attitude.quaternion
-                rawOrientation = simd_quatf(vector: SIMD4<Float>(Float(q.x), Float(q.y), Float(q.z), Float(q.w)))
-                orientation = rawOrientation * calibrationOffset
-                lastUpdate = Date()
-                status = .running
+                self.rawOrientation = simd_quatf(vector: SIMD4<Float>(Float(q.x), Float(q.y), Float(q.z), Float(q.w)))
+                self.orientation = self.rawOrientation * self.calibrationOffset
+                self.lastUpdate = Date()
+                self.status = .running
             }
         }
         watchdog = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                guard let self, manager.isDeviceMotionActive else { return }
-                if Date().timeIntervalSince(lastUpdate) > 0.75 {
-                    status = .interrupted
+                guard let self, self.manager.isDeviceMotionActive else { return }
+                if Date().timeIntervalSince(self.lastUpdate) > 0.75 {
+                    self.status = .interrupted
                 }
             }
         }

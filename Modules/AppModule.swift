@@ -60,7 +60,7 @@ enum AppModule: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 
     var tint: Color {
-        Color(hex: switch self {
+        let hex: UInt32 = switch self {
         case .browser: 0x56B8FF
         case .photos: 0xFF7EA8
         case .video: 0xA78BFA
@@ -71,6 +71,7 @@ enum AppModule: String, Codable, CaseIterable, Identifiable, Sendable {
         case .settings: 0x94A3B8
         case .environments: 0x818CF8
         case .windows: 0x67E8F9
-        })
+        }
+        return Color(hex: hex)
     }
 }

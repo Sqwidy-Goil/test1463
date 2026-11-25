@@ -2,15 +2,14 @@ import SwiftUI
 import AVFoundation
 import UniformTypeIdentifiers
 
-@MainActor
-final class AudioPlaybackModel: ObservableObject {
+final class AudioPlaybackModel: NSObject, ObservableObject {
     @Published private(set) var player: AVAudioPlayer?
     @Published private(set) var duration: Double = 0
     @Published var currentTime: Double = 0
     @Published private(set) var isPlaying = false
     @Published private(set) var isRepeating = false
     @Published private(set) var title: String?
-    @Published private(set) var error: String?
+    @Published var error: String?
     private var observer: Any?
 
     func load(_ url: URL) {
@@ -53,10 +52,11 @@ final class AudioPlaybackModel: ObservableObject {
 
     func startObserving() {
         guard observer == nil, let player else { return }
-        observer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { _ in
+        observer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                currentTime = player.currentTime
-                isPlaying = player.isPlaying
+                guard let self else { return }
+                self.currentTime = player.currentTime
+                self.isPlaying = player.isPlaying
             }
         }
     }

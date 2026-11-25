@@ -16,10 +16,13 @@ final class DocumentStore {
         try FileManager.default.contentsOfDirectory(
             at: rootURL,
             includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey, .isDirectoryKey]
-        ).sorted { lhs, rhs in
-            (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate ?? .distantPast)
-                > ((try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast)
+        ).sorted {
+            modificationDate(for: $0) > modificationDate(for: $1)
         }
+    }
+
+    private func modificationDate(for url: URL) -> Date {
+        (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
     }
 
     @discardableResult

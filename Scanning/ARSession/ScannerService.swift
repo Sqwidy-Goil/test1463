@@ -44,8 +44,8 @@ final class ScannerService: ObservableObject {
     private var timer: Timer?
 
     init() {
-        NotificationCenter.default.addObserver(self, selector: #selector(sessionWasInterrupted), name: .ARSessionWasInterrupted, object: session)
-        NotificationCenter.default.addObserver(self, selector: #selector(sessionInterruptionEnded), name: .ARSessionWasInterruptionEnded, object: session)
+        NotificationCenter.default.addObserver(self, selector: #selector(sessionWasInterrupted), name: ARSession.wasInterruptedNotification, object: session)
+        NotificationCenter.default.addObserver(self, selector: #selector(sessionInterruptionEnded), name: ARSession.interruptionEndedNotification, object: session)
     }
 
     deinit {
@@ -71,7 +71,6 @@ final class ScannerService: ObservableObject {
         }
         let configuration = ARWorldTrackingConfiguration()
         configuration.planeDetection = [.horizontal, .vertical]
-        configuration.debugOptions = [.showFeaturePoints]
         session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
         status = .running
         timer?.invalidate()
@@ -98,11 +97,13 @@ final class ScannerService: ObservableObject {
             .filter { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }
         let base = "Scan-\(safeName.isEmpty ? "workspace" : safeName)-\(Int(Date().timeIntervalSince1970))"
         do {
-            let metadataData = try JSONEncoder.pretty.encode(snapshot)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let metadataData = try encoder.encode(snapshot)
             lastSavedPoints = try DocumentStore.shared.write(metadataData, to: "\(base).visionpoints.json")
             await saveWorldMap(base: base)
         } catch {
-            error = error.localizedDescription
+            self.error = error.localizedDescription
         }
     }
 
@@ -136,7 +137,7 @@ final class ScannerService: ObservableObject {
             loadedMetadata = try JSONDecoder().decode(ScanMetadata.self, from: Data(contentsOf: url))
             error = nil
         } catch {
-            error = error.localizedDescription
+            self.error = error.localizedDescription
         }
     }
 
@@ -152,7 +153,6 @@ final class ScannerService: ObservableObject {
             let configuration = ARWorldTrackingConfiguration()
             configuration.initialWorldMap = map
             configuration.planeDetection = [.horizontal, .vertical]
-            configuration.debugOptions = [.showFeaturePoints]
             session.run(configuration, options: [])
             status = .running
             timer?.invalidate()
@@ -166,7 +166,7 @@ final class ScannerService: ObservableObject {
             }
             error = nil
         } catch {
-            error = error.localizedDescription
+            self.error = error.localizedDescription
             status = .failed(error.localizedDescription)
         }
     }
@@ -204,7 +204,7 @@ final class ScannerService: ObservableObject {
 
     private func sampleFrame() {
         guard let frame = session.currentFrame else { return }
-        featurePointCount = frame.rawFeaturePoints?.count ?? 0
+        featurePointCount = frame.rawFeaturePoints?.points.count ?? 0
         planeCount = frame.anchors.reduce(0) { count, anchor in
             count + (anchor is ARPlaneAnchor ? 1 : 0)
         }
@@ -233,7 +233,7 @@ final class ScannerService: ObservableObject {
 
     private func makeMetadata() -> ScanMetadata {
         let points = session.currentFrame?.rawFeaturePoints
-        let count = points?.count ?? 0
+        let count = points?.points.count ?? 0
         let stride = max(1, count / 10_000)
         var samples: [ScanFeaturePoint] = []
         if let points {
@@ -261,15 +261,9 @@ final class ScannerService: ObservableObject {
     }
 
     @objc nonisolated private func sessionWasInterrupted(_ notification: Notification) {
-        let message: String
-        if let interruption = notification.userInfo?[ARSessionInterruptionReasonKey] as? Int {
-            message = interruption == ARSessionInterruptionReason.wasSuspended.rawValue ? "Suspended" : "Interrupted"
-        } else {
-            message = "Session interrupted"
-        }
         Task { @MainActor [weak self] in
-            self?.trackingState = message
-            self?.status = .limited(message)
+            self?.trackingState = "Session interrupted"
+            self?.status = .limited("Session interrupted")
         }
     }
 }

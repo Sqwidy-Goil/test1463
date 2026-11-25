@@ -71,7 +71,7 @@ final class HandTrackingService: NSObject, ObservableObject, CameraFrameDelegate
                 }
                 return HandSample(
                     thumbTip: try point(.thumbTip),
-                    indexTip: try point(.indexFingerTip),
+                    indexTip: try point(.indexTip),
                     wrist: try point(.wrist),
                     middleMCP: try point(.middleMCP),
                     timestamp: CACurrentMediaTime()

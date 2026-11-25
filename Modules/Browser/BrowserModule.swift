@@ -109,10 +109,11 @@ private struct BrowserWebView: UIViewRepresentable {
     @ObservedObject var model: BrowserNavigationModel
 
     func makeUIView(context: Context) -> WKWebView {
-        let webView = WKWebView(frame: .zero)
+        let configuration = WKWebViewConfiguration()
+        configuration.allowsInlineMediaPlayback = true
+        let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = model
         webView.allowsBackForwardNavigationGestures = true
-        webView.allowsInlineMediaPlayback = true
         model.webView = webView
         model.submitAddress()
         return webView
