@@ -42,13 +42,13 @@ struct ScannerModuleView: View {
 
                 HStack(spacing: 12) {
                     if !scanner.isSessionActive {
-                        Button("Start Scan") { Task { await scanner.start() } }.buttonStyle(PrimaryButtonStyle)
+                        Button("Start Scan") { Task { await scanner.start() } }.buttonStyle(PrimaryButtonStyle())
                     } else {
                         Button("Save World Map + Points") { Task { await scanner.saveScan(name: scanName); files = scanner.scanFiles() } }
-                            .buttonStyle(PrimaryButtonStyle)
-                        Button("Stop") { scanner.stop() }.buttonStyle(QuietButtonStyle)
+                            .buttonStyle(PrimaryButtonStyle())
+                        Button("Stop") { scanner.stop() }.buttonStyle(QuietButtonStyle())
                     }
-                    Button("Load World Map") { showingImporter = true; files = scanner.scanFiles() }.buttonStyle(QuietButtonStyle)
+                    Button("Load World Map") { showingImporter = true; files = scanner.scanFiles() }.buttonStyle(QuietButtonStyle())
                     if let error = scanner.error {
                         Text(error).font(Typography.caption).foregroundStyle(Theme.danger).frame(maxWidth: 260)
                     }
@@ -64,7 +64,7 @@ struct ScannerModuleView: View {
                                 }
                             }
                         }
-                        .buttonStyle(QuietButtonStyle)
+                        .buttonStyle(QuietButtonStyle())
                     }
                     if let metadata = scanner.loadedMetadata {
                         Text("\(metadata.featurePointCount) saved points • \(metadata.createdAt.formatted(date: .abbreviated, time: .shortened))")

@@ -14,7 +14,7 @@ struct ModuleContentView: View {
                 }
                 Spacer()
                 Button("Done") { coordinator.activeModule = nil }
-                    .buttonStyle(PrimaryButtonStyle)
+                    .buttonStyle(PrimaryButtonStyle())
             }
             .padding(22)
             .background(.ultraThinMaterial)

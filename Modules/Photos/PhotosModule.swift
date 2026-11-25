@@ -17,9 +17,9 @@ struct PhotosModuleView: View {
                 Text("Photos stay on this device. The system picker does not request full library access.")
                     .font(Typography.caption).foregroundStyle(Theme.secondaryInk)
                 Spacer()
-                Button("Select Photos") { showingPicker = true }.buttonStyle(PrimaryButtonStyle)
+                Button("Select Photos") { showingPicker = true }.buttonStyle(PrimaryButtonStyle())
                 Button("Use as 360° Background") { usePanorama() }
-                    .buttonStyle(QuietButtonStyle).disabled(images.isEmpty)
+                    .buttonStyle(QuietButtonStyle()).disabled(images.isEmpty)
             }
             .padding(.horizontal, 22)
 

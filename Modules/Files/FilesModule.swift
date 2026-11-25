@@ -14,7 +14,7 @@ struct FilesModuleView: View {
                 Text("App-private storage. Imported files never leave this device unless you share them.")
                     .font(Typography.caption).foregroundStyle(Theme.secondaryInk)
                 Spacer()
-                Button("Import File") { showingImporter = true }.buttonStyle(PrimaryButtonStyle)
+                Button("Import File") { showingImporter = true }.buttonStyle(PrimaryButtonStyle())
             }
             .padding(.horizontal, 22)
 
@@ -38,7 +38,7 @@ struct FilesModuleView: View {
                             }
                             Spacer()
                             ShareLink(item: file) { Label("Share", systemImage: "square.and.arrow.up") }
-                                .buttonStyle(QuietButtonStyle)
+                                .buttonStyle(QuietButtonStyle())
                             Button(role: .destructive) { pendingDelete = file } label: {
                                 Image(systemName: "trash").foregroundStyle(Theme.danger)
                             }.buttonStyle(.plain)

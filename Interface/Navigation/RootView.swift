@@ -127,14 +127,14 @@ private struct HandheldHUD: View {
                 Button(coordinator.mode == .spatial ? "Handheld" : "Spatial") {
                     coordinator.toggleSpatialMode()
                 }
-                .buttonStyle(QuietButtonStyle)
+                .buttonStyle(QuietButtonStyle())
                 Button("Enter VR") {
                     coordinator.showCalibration = true
                     if coordinator.settings.motionEnabled {
                         coordinator.motion.start()
                     }
                 }
-                .buttonStyle(PrimaryButtonStyle)
+                .buttonStyle(PrimaryButtonStyle())
                 .accessibilityIdentifier("enter-vr")
             }
             .padding(.horizontal, 24)
@@ -152,7 +152,7 @@ private struct HandheldHUD: View {
                             windowManager.flush()
                         }
                     }
-                    .buttonStyle(QuietButtonStyle)
+                    .buttonStyle(QuietButtonStyle())
                 }
                 .foregroundStyle(windowManager.persistenceError == nil ? Theme.secondaryInk : Theme.danger)
                 .padding(.horizontal, 16)
@@ -223,7 +223,7 @@ private struct SelectedWindowBar: View {
             ModuleBadge(module: window.module, size: 36)
             Text(window.module.title).font(Typography.headline).foregroundStyle(Theme.ink)
             Button("Open") { coordinator.openWindow(window) }
-                .buttonStyle(PrimaryButtonStyle)
+                .buttonStyle(PrimaryButtonStyle())
                 .accessibilityIdentifier("open-selected-window")
             Button(window.lifecycle == .minimized ? "Restore" : "Minimize") {
                 if window.lifecycle == .minimized {
@@ -232,11 +232,11 @@ private struct SelectedWindowBar: View {
                     coordinator.windowManager.minimize(window.id)
                 }
             }
-            .buttonStyle(QuietButtonStyle)
+            .buttonStyle(QuietButtonStyle())
             Button("Maximize") { coordinator.windowManager.maximize(window.id) }
-                .buttonStyle(QuietButtonStyle)
+                .buttonStyle(QuietButtonStyle())
             Button(window.isPinned ? "Unpin" : "Pin") { coordinator.windowManager.togglePinned(window.id) }
-                .buttonStyle(QuietButtonStyle)
+                .buttonStyle(QuietButtonStyle())
             Menu {
                 ForEach(WindowPositioning.allCases) { mode in
                     Button(mode.title) { coordinator.windowManager.setPositioning(mode, for: window.id) }
@@ -244,12 +244,12 @@ private struct SelectedWindowBar: View {
             } label: {
                 Label(window.positioning.title, systemImage: "anchor").font(Typography.caption)
             }
-            .buttonStyle(QuietButtonStyle)
+            .buttonStyle(QuietButtonStyle())
             HStack(spacing: 4) {
                 Button { coordinator.windowManager.adjustDepth(of: window.id, by: 0.25) } label: { Image(systemName: "minus.circle") }
                 Button { coordinator.windowManager.adjustDepth(of: window.id, by: -0.25) } label: { Image(systemName: "plus.circle") }
             }
-            .buttonStyle(QuietButtonStyle)
+            .buttonStyle(QuietButtonStyle())
             Button(role: .destructive) {
                 coordinator.windowManager.close(window.id)
             } label: {

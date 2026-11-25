@@ -22,14 +22,14 @@ struct CameraModuleView: View {
                                 coordinator.showMessage("Photo capture failed.")
                             }
                         }
-                    }.buttonStyle(PrimaryButtonStyle)
+                    }.buttonStyle(PrimaryButtonStyle())
                     Button("Stop Camera") {
                         Task { await coordinator.updateCamera(enabled: false) }
-                    }.buttonStyle(QuietButtonStyle)
+                    }.buttonStyle(QuietButtonStyle())
                 } else {
                     Button("Enable Rear Camera") {
                         Task { await coordinator.updateCamera(enabled: true) }
-                    }.buttonStyle(PrimaryButtonStyle)
+                    }.buttonStyle(PrimaryButtonStyle())
                 }
 
                 Toggle("Hand Tracking", isOn: Binding(get: { coordinator.settings.handTrackingEnabled }, set: { enabled in
@@ -48,7 +48,7 @@ struct CameraModuleView: View {
             .padding(.horizontal, 22)
 
             if coordinator.permissions.cameraStatus == .denied {
-                Button("Open Camera Settings") { coordinator.permissions.openSettings() }.buttonStyle(QuietButtonStyle)
+                Button("Open Camera Settings") { coordinator.permissions.openSettings() }.buttonStyle(QuietButtonStyle())
             }
         }
         .padding(18)

@@ -69,11 +69,11 @@ struct BrowserModuleView: View {
         VStack(spacing: 12) {
             HStack(spacing: 10) {
                 Button(action: model.goBack) { Image(systemName: "chevron.left") }
-                    .buttonStyle(QuietButtonStyle).disabled(!model.canGoBack)
+                    .buttonStyle(QuietButtonStyle()).disabled(!model.canGoBack)
                 Button(action: model.goForward) { Image(systemName: "chevron.right") }
-                    .buttonStyle(QuietButtonStyle).disabled(!model.canGoForward)
+                    .buttonStyle(QuietButtonStyle()).disabled(!model.canGoForward)
                 Button(action: model.reload) { Image(systemName: "arrow.clockwise") }
-                    .buttonStyle(QuietButtonStyle)
+                    .buttonStyle(QuietButtonStyle())
                 HStack {
                     Image(systemName: "lock.fill").foregroundStyle(Theme.cyan)
                     TextField("Search or enter a website", text: $model.address)
@@ -87,7 +87,7 @@ struct BrowserModuleView: View {
                 .padding(.horizontal, 14)
                 .frame(maxWidth: .infinity)
                 .background(.ultraThinMaterial, in: Capsule())
-                Button("Go", action: model.submitAddress).buttonStyle(PrimaryButtonStyle)
+                Button("Go", action: model.submitAddress).buttonStyle(PrimaryButtonStyle())
             }
             .padding(.horizontal, 16)
 

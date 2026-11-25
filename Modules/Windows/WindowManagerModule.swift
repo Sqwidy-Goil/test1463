@@ -35,8 +35,8 @@ struct WindowManagerModuleView: View {
                         Spacer()
                         Button(window.lifecycle == .minimized ? "Restore" : "Minimize") {
                             if window.lifecycle == .minimized { coordinator.windowManager.restore(window.id) } else { coordinator.windowManager.minimize(window.id) }
-                        }.buttonStyle(QuietButtonStyle)
-                        Button("Open") { coordinator.openWindow(window) }.buttonStyle(PrimaryButtonStyle)
+                        }.buttonStyle(QuietButtonStyle())
+                        Button("Open") { coordinator.openWindow(window) }.buttonStyle(PrimaryButtonStyle())
                         Menu {
                             Button(window.isPinned ? "Unpin" : "Pin") { coordinator.windowManager.togglePinned(window.id) }
                             ForEach(WindowPositioning.allCases) { mode in
@@ -44,7 +44,7 @@ struct WindowManagerModuleView: View {
                             }
                         } label: {
                             Image(systemName: "ellipsis.circle")
-                        }.buttonStyle(QuietButtonStyle)
+                        }.buttonStyle(QuietButtonStyle())
                         Button(role: .destructive) { coordinator.windowManager.close(window.id) } label: {
                             Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.danger)
                         }.buttonStyle(.plain)

@@ -15,7 +15,7 @@ struct EnvironmentModuleView: View {
                         .font(Typography.caption).foregroundStyle(Theme.secondaryInk)
                     Spacer()
                     if coordinator.settings.panoramaURL != nil {
-                        Button("Remove Panorama", role: .destructive, action: removePanorama).buttonStyle(QuietButtonStyle)
+                        Button("Remove Panorama", role: .destructive, action: removePanorama).buttonStyle(QuietButtonStyle())
                     }
                 }
                 .padding(.horizontal, 22)
@@ -58,7 +58,7 @@ struct EnvironmentModuleView: View {
                 ModuleSection(title: "Panoramic environment") {
                     Text("Import a wide equirectangular image. Ordinary photos can be wrapped, but a 2:1 panorama provides the best result.")
                         .font(Typography.caption).foregroundStyle(Theme.secondaryInk)
-                    Button("Choose Panorama Image") { showingImporter = true }.buttonStyle(PrimaryButtonStyle)
+                    Button("Choose Panorama Image") { showingImporter = true }.buttonStyle(PrimaryButtonStyle())
                     if let error {
                         Text(error).font(Typography.caption).foregroundStyle(Theme.danger)
                     }

@@ -125,7 +125,7 @@ struct MusicModuleView: View {
                         .background(.ultraThinMaterial, in: Circle())
                 }
                 .buttonStyle(.plain).disabled(model.player == nil)
-                Button("Choose Audio") { showingImporter = true }.buttonStyle(QuietButtonStyle)
+                Button("Choose Audio") { showingImporter = true }.buttonStyle(QuietButtonStyle())
             }
 
             if importing { ProgressView() }

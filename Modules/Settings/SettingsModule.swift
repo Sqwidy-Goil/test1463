@@ -19,7 +19,7 @@ struct SettingsModuleView: View {
                     SettingsSlider(title: "Screen distance", value: $settings.viewingDistance, range: 2...6, step: 0.1, output: String(format: "%.1f m", settings.viewingDistance))
                     SettingsSlider(title: "Field of view", value: $settings.fieldOfView, range: 50...100, step: 1, output: "\(Int(settings.fieldOfView))°")
                     SettingsSlider(title: "Lens correction", value: $settings.lensDistortion, range: 0...0.3, step: 0.01, output: String(format: "%.2f", settings.lensDistortion))
-                    Button("Reset Optical Defaults") { settings.resetOpticalDefaults() }.buttonStyle(QuietButtonStyle)
+                    Button("Reset Optical Defaults") { settings.resetOpticalDefaults() }.buttonStyle(QuietButtonStyle())
                 }
 
                 ModuleSection(title: "Motion") {
@@ -28,7 +28,7 @@ struct SettingsModuleView: View {
                     HStack {
                         Text(motionSummary).font(Typography.caption).foregroundStyle(Theme.secondaryInk)
                         Spacer()
-                        Button("Recalibrate") { motion.calibrate() }.buttonStyle(QuietButtonStyle)
+                        Button("Recalibrate") { motion.calibrate() }.buttonStyle(QuietButtonStyle())
                     }
                 }
 
@@ -44,7 +44,7 @@ struct SettingsModuleView: View {
                     Text("Vision hand processing runs on this device. Pinch and move to select and reposition the nearest spatial window; pinch distance changes size.")
                         .font(Typography.caption).foregroundStyle(Theme.secondaryInk)
                     if coordinator.permissions.cameraStatus == .denied {
-                        Button("Open Camera Settings") { coordinator.permissions.openSettings() }.buttonStyle(QuietButtonStyle)
+                        Button("Open Camera Settings") { coordinator.permissions.openSettings() }.buttonStyle(QuietButtonStyle())
                     }
                 }
 

@@ -44,8 +44,8 @@ final class ScannerService: ObservableObject {
     private var timer: Timer?
 
     init() {
-        NotificationCenter.default.addObserver(self, selector: #selector(sessionWasInterrupted), name: ARSession.wasInterruptedNotification, object: session)
-        NotificationCenter.default.addObserver(self, selector: #selector(sessionInterruptionEnded), name: ARSession.interruptionEndedNotification, object: session)
+        NotificationCenter.default.addObserver(self, selector: #selector(sessionWasInterrupted), name: Notification.Name("ARSessionWasInterrupted"), object: session)
+        NotificationCenter.default.addObserver(self, selector: #selector(sessionInterruptionEnded), name: Notification.Name("ARSessionWasInterruptionEnded"), object: session)
     }
 
     deinit {

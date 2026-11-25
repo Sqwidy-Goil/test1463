@@ -96,6 +96,8 @@ struct MetalSpatialView: UIViewRepresentable {
         context.coordinator.detach()
     }
 
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     @MainActor
     final class Coordinator: NSObject, MTKViewDelegate {
         weak var view: MTKView?
@@ -134,10 +136,10 @@ struct MetalSpatialView: UIViewRepresentable {
             view.delegate = self
             do {
                 guard let device = view.device ?? MTLCreateSystemDefaultDevice() else {
-                onError?("Metal is not available on this device.")
-                return
-            }
-            renderer = try StereoscopicRenderer(device: device)
+                    onError?("Metal is not available on this device.")
+                    return
+                }
+                renderer = try StereoscopicRenderer(device: device)
                 renderer?.onFrame = { [weak self] snapshot in
                     self?.onFrame?(snapshot)
                 }

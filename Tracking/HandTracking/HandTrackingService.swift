@@ -65,7 +65,7 @@ final class HandTrackingService: NSObject, ObservableObject, CameraFrameDelegate
             }
             let samples = try observations.map { observation in
                 func point(_ joint: VNHumanHandPoseObservation.JointName) throws -> SIMD2<Float> {
-                    let landmark = try observation.landmark(joint)
+                    let landmark = try observation.recognizedPoint(joint)
                     let location = landmark.location
                     return SIMD2<Float>(Float(location.x), Float(location.y))
                 }

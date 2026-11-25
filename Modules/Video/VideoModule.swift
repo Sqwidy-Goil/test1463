@@ -15,7 +15,7 @@ struct VideoModuleView: View {
             HStack {
                 Text(title).font(Typography.headline).foregroundStyle(Theme.ink)
                 Spacer()
-                Button("Choose Video") { showingImporter = true }.buttonStyle(PrimaryButtonStyle)
+                Button("Choose Video") { showingImporter = true }.buttonStyle(PrimaryButtonStyle())
             }
             .padding(.horizontal, 22)
 

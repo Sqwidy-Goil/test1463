@@ -110,8 +110,7 @@ enum WindowTextureFactory {
             let outer = roundedRect(CGRect(origin: .zero, size: size), radius: layout.corner)
             context.saveGState()
             context.setShadow(offset: CGSize(width: 0, height: 10 * layout.scale), blur: 26 * layout.scale, color: UIColor.black.withAlphaComponent(0.4).cgColor)
-            outer.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
+            fill(outer, color: UIColor.black.withAlphaComponent(0.4))
             context.restoreGState()
 
             context.saveGState()
@@ -133,15 +132,18 @@ enum WindowTextureFactory {
                 roundedRect(content, radius: 18 * layout.scale).addClip()
                 drawContent(window.module, in: content, scale: layout.scale, palette: palette)
                 context.restoreGState()
-                roundedRect(content, radius: 18 * layout.scale).stroke(UIColor.white.withAlphaComponent(0.13), lineWidth: layout.scale)
+                stroke(roundedRect(content, radius: 18 * layout.scale), color: UIColor.white.withAlphaComponent(0.13), lineWidth: layout.scale)
                 drawFooter(in: size, layout: layout)
             } else {
                 drawMinimizedContent(window.module, in: minimizedContentRect(in: size, layout: layout), layout: layout, palette: palette)
             }
             context.restoreGState()
 
-            roundedRect(CGRect(origin: .zero, size: size).insetBy(dx: 0.5 * layout.scale, dy: 0.5 * layout.scale), radius: layout.corner)
-                .stroke(UIColor.white.withAlphaComponent(0.29), lineWidth: layout.scale)
+            stroke(
+                roundedRect(CGRect(origin: .zero, size: size).insetBy(dx: 0.5 * layout.scale, dy: 0.5 * layout.scale), radius: layout.corner),
+                color: UIColor.white.withAlphaComponent(0.29),
+                lineWidth: layout.scale
+            )
             drawControls(in: size, layout: layout, minimized: compact)
         }
     }
@@ -151,17 +153,14 @@ enum WindowTextureFactory {
             let layout = Layout(size: size)
             let palette = Palette(module: .windows)
             let outer = roundedRect(CGRect(origin: .zero, size: size), radius: layout.corner)
-            outer.setFill()
-            UIColor(red: 0.025, green: 0.045, blue: 0.075, alpha: 0.93).setFill()
-            UIGraphicsGetCurrentContext()?.fill(CGRect(origin: .zero, size: size))
+            fill(outer, color: UIColor(red: 0.025, green: 0.045, blue: 0.075, alpha: 0.93))
             drawGlassGradient(in: size, palette: palette)
             drawHighlights(in: size, layout: layout, palette: palette)
             drawIcon("rectangle.on.rectangle", color: palette.accent, pointSize: 46, in: CGRect(x: 288, y: 98, width: 64, height: 64))
             drawCenteredText("No window open", in: CGRect(x: 40, y: 176, width: 560, height: 30), size: 22, weight: .semibold, color: white)
             drawCenteredText("Choose a module to begin", in: CGRect(x: 40, y: 211, width: 560, height: 22), size: 13, weight: .medium, color: secondary)
             drawCenteredText("Drag to move  •  Pinch to resize  •  Hold to open app", in: CGRect(x: 40, y: 300, width: 560, height: 22), size: 11, weight: .medium, color: secondary)
-            roundedRect(CGRect(origin: .zero, size: size).insetBy(dx: 0.5, dy: 0.5), radius: layout.corner)
-                .stroke(UIColor.white.withAlphaComponent(0.25), lineWidth: 1)
+            stroke(roundedRect(CGRect(origin: .zero, size: size).insetBy(dx: 0.5, dy: 0.5), radius: layout.corner), color: UIColor.white.withAlphaComponent(0.25), lineWidth: 1)
         }
     }
 
@@ -180,6 +179,17 @@ enum WindowTextureFactory {
 
     private static func roundedRect(_ rect: CGRect, radius: CGFloat) -> UIBezierPath {
         UIBezierPath(roundedRect: rect, cornerRadius: max(0, min(radius, min(rect.width, rect.height) / 2)))
+    }
+
+    private static func fill(_ path: UIBezierPath, color: UIColor) {
+        color.setFill()
+        path.fill()
+    }
+
+    private static func stroke(_ path: UIBezierPath, color: UIColor, lineWidth: CGFloat) {
+        color.setStroke()
+        path.lineWidth = lineWidth
+        path.stroke()
     }
 
     private static func drawGlassGradient(in size: CGSize, palette: Palette) {
@@ -255,7 +265,7 @@ enum WindowTextureFactory {
 
     private static func drawText(_ text: String, in rect: CGRect, size: CGFloat, weight: UIFont.Weight, color: UIColor) {
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: size, weight: weight, design: .rounded),
+            .font: UIFont.systemFont(ofSize: size, weight: weight),
             .foregroundColor: color
         ]
         let attributed = NSAttributedString(string: text, attributes: attributes)
@@ -265,7 +275,7 @@ enum WindowTextureFactory {
 
     private static func drawCenteredText(_ text: String, in rect: CGRect, size: CGFloat, weight: UIFont.Weight, color: UIColor) {
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: size, weight: weight, design: .rounded),
+            .font: UIFont.systemFont(ofSize: size, weight: weight),
             .foregroundColor: color
         ]
         NSAttributedString(string: text, attributes: attributes).draw(in: rect)
@@ -275,7 +285,7 @@ enum WindowTextureFactory {
         let path = roundedRect(rect, radius: radius * scale)
         fill.setFill()
         path.fill()
-        path.stroke(UIColor.white.withAlphaComponent(0.09), lineWidth: 0.7 * scale)
+        stroke(path, color: UIColor.white.withAlphaComponent(0.09), lineWidth: 0.7 * scale)
         return path
     }
 
@@ -285,7 +295,7 @@ enum WindowTextureFactory {
         path.addLine(to: to)
         color.setStroke()
         path.lineWidth = width
-        path.lineCap = .round
+        path.lineCapStyle = .round
         path.stroke()
     }
 
@@ -297,14 +307,14 @@ enum WindowTextureFactory {
             let path = roundedRect(rect, radius: rect.height / 2)
             UIColor.black.withAlphaComponent(0.2).setFill()
             path.fill()
-            path.stroke(UIColor.white.withAlphaComponent(0.17), lineWidth: 0.8 * layout.scale)
+            stroke(path, color: UIColor.white.withAlphaComponent(0.17), lineWidth: 0.8 * layout.scale)
         }
         UIColor.white.withAlphaComponent(0.78).setStroke()
         let minimizeMark = UIBezierPath()
         minimizeMark.move(to: CGPoint(x: minimize.minX + 7 * layout.scale, y: minimize.midY + 2 * layout.scale))
         minimizeMark.addLine(to: CGPoint(x: minimize.maxX - 7 * layout.scale, y: minimize.midY + 2 * layout.scale))
         minimizeMark.lineWidth = 1.4 * layout.scale
-        minimizeMark.lineCap = .round
+        minimizeMark.lineCapStyle = .round
         minimizeMark.stroke()
         let closeMark = UIBezierPath()
         closeMark.move(to: CGPoint(x: close.minX + 7.5 * layout.scale, y: close.minY + 7.5 * layout.scale))
@@ -331,8 +341,8 @@ enum WindowTextureFactory {
         context?.fill(CGRect(x: inset.minX, y: dotY - 2 * layout.scale, width: 4 * layout.scale, height: 4 * layout.scale))
         drawText(defaultStatus(for: module), in: CGRect(x: inset.minX + 11 * layout.scale, y: rect.minY, width: max(0, inset.width - 12 * layout.scale), height: rect.height), size: layout.bodySize, weight: .medium, color: secondary)
         for index in 0..<8 {
-            let height = (4 + (index * 7 % 13)) * layout.scale
-            let x = rect.maxX - (48 - index * 5) * layout.scale
+            let height = CGFloat(4 + (index * 7 % 13)) * layout.scale
+            let x = rect.maxX - CGFloat(48 - index * 5) * layout.scale
             palette.accent.withAlphaComponent(0.24 + Double(index % 3) * 0.17).setFill()
             context?.fill(CGRect(x: x, y: dotY - height / 2, width: 2 * layout.scale, height: height))
         }
@@ -369,7 +379,7 @@ enum WindowTextureFactory {
         panel(address, scale: scale, radius: 17, fill: UIColor.black.withAlphaComponent(0.18))
         drawIcon("lock", color: secondary, pointSize: 11 * scale, in: CGRect(x: address.minX + 11 * scale, y: address.minY + 8 * scale, width: 17 * scale, height: 18 * scale))
         drawText("Search or enter a local address", in: CGRect(x: address.minX + 36 * scale, y: address.minY, width: address.width - 66 * scale, height: address.height), size: 11 * scale, weight: .medium, color: tertiary)
-        let card = rect.insetBy(dx: 18 * scale, dy: 0).offsetBy(dx: 0, dy: 64 * scale)
+        var card = rect.insetBy(dx: 18 * scale, dy: 0).offsetBy(dx: 0, dy: 64 * scale)
         card.height = rect.height - 79 * scale
         panel(card, scale: scale, radius: 13, fill: palette.accent.withAlphaComponent(0.055))
         drawText("Start page", in: CGRect(x: card.minX + 17 * scale, y: card.minY + 9 * scale, width: card.width - 34 * scale, height: 23 * scale), size: 14 * scale, weight: .semibold, color: white)
@@ -435,7 +445,7 @@ enum WindowTextureFactory {
         palette.accent.withAlphaComponent(0.16).setFill()
         context?.fillEllipse(in: rect.insetBy(dx: rect.width * 0.18, dy: rect.height * 0.12))
         context?.restoreGState()
-        roundedRect(rect, radius: 12 * scale).stroke(UIColor.white.withAlphaComponent(0.18), lineWidth: 0.7 * scale)
+        stroke(roundedRect(rect, radius: 12 * scale), color: UIColor.white.withAlphaComponent(0.18), lineWidth: 0.7 * scale)
     }
 
     private static func drawVideo(in rect: CGRect, scale: CGFloat, palette: Palette) {
@@ -463,8 +473,8 @@ enum WindowTextureFactory {
         context?.restoreGState()
         let playDiameter = 44 * scale
         let play = CGRect(x: stage.midX - playDiameter / 2, y: stage.midY - playDiameter / 2, width: playDiameter, height: playDiameter)
-        roundedRect(play, radius: playDiameter / 2).fill(UIColor.black.withAlphaComponent(0.42))
-        roundedRect(play, radius: playDiameter / 2).stroke(UIColor.white.withAlphaComponent(0.25), lineWidth: scale)
+        fill(roundedRect(play, radius: playDiameter / 2), color: UIColor.black.withAlphaComponent(0.42))
+        stroke(roundedRect(play, radius: playDiameter / 2), color: UIColor.white.withAlphaComponent(0.25), lineWidth: scale)
         let triangle = UIBezierPath()
         triangle.move(to: CGPoint(x: play.midX - 4 * scale, y: play.midY - 8 * scale))
         triangle.addLine(to: CGPoint(x: play.midX + 9 * scale, y: play.midY))
@@ -532,7 +542,7 @@ enum WindowTextureFactory {
             context?.fillEllipse(in: CGRect(x: point.x - 2.5 * scale, y: point.y - 2.5 * scale, width: 5 * scale, height: 5 * scale))
         }
         context?.restoreGState()
-        roundedRect(stage, radius: 13 * scale).stroke(UIColor.white.withAlphaComponent(0.13), lineWidth: scale)
+        stroke(roundedRect(stage, radius: 13 * scale), color: UIColor.white.withAlphaComponent(0.13), lineWidth: scale)
         let badge = CGRect(x: stage.minX + 13 * scale, y: stage.minY + 12 * scale, width: 105 * scale, height: 24 * scale)
         panel(badge, scale: scale, radius: 12, fill: UIColor.black.withAlphaComponent(0.35))
         palette.accent.setFill()
@@ -568,7 +578,7 @@ enum WindowTextureFactory {
         }
         drawIcon("music.note", color: white.withAlphaComponent(0.85), pointSize: 31 * scale, in: album)
         context?.restoreGState()
-        roundedRect(album, radius: 15 * scale).stroke(UIColor.white.withAlphaComponent(0.2), lineWidth: scale)
+        stroke(roundedRect(album, radius: 15 * scale), color: UIColor.white.withAlphaComponent(0.2), lineWidth: scale)
         let detailsX = album.maxX + 19 * scale
         let detailsWidth = rect.maxX - detailsX
         drawText("Night Transit", in: CGRect(x: detailsX, y: rect.minY + 7 * scale, width: detailsWidth, height: 24 * scale), size: 15 * scale, weight: .semibold, color: white)
@@ -580,14 +590,16 @@ enum WindowTextureFactory {
         for index in 0..<count {
             let amplitude = 0.2 + abs(sin(Double(index) * 1.7) * 0.48 + cos(Double(index) * 0.43) * 0.28)
             let height = max(3 * scale, waveform.height * amplitude)
-            palette.accent.withAlphaComponent(index < count * 3 / 10 ? 0.9 : 0.3).setFill()
-            context?.fill(roundedRect(CGRect(x: waveform.minX + CGFloat(index) * step, y: waveform.midY - height / 2, width: max(1.5 * scale, step * 0.46), height: height), radius: scale))
+            fill(
+                roundedRect(CGRect(x: waveform.minX + CGFloat(index) * step, y: waveform.midY - height / 2, width: max(1.5 * scale, step * 0.46), height: height), radius: scale),
+                color: palette.accent.withAlphaComponent(index < count * 3 / 10 ? 0.9 : 0.3)
+            )
         }
         let transportY = rect.maxY - 41 * scale
         drawText("Local audio", in: CGRect(x: detailsX, y: transportY, width: detailsWidth / 3, height: 25 * scale), size: 9 * scale, weight: .medium, color: secondary)
         let playDiameter = 33 * scale
         let play = CGRect(x: detailsX + detailsWidth / 2 - playDiameter / 2, y: transportY - 4 * scale, width: playDiameter, height: playDiameter)
-        roundedRect(play, radius: playDiameter / 2).fill(palette.accent)
+        fill(roundedRect(play, radius: playDiameter / 2), color: palette.accent)
         let triangle = UIBezierPath()
         triangle.move(to: CGPoint(x: play.midX - 3 * scale, y: play.midY - 6 * scale))
         triangle.addLine(to: CGPoint(x: play.midX + 7 * scale, y: play.midY))
@@ -707,7 +719,7 @@ enum WindowTextureFactory {
                 UIColor(red: 0.015, green: 0.055, blue: 0.08, alpha: 1),
                 UIColor(red: 0.008, green: 0.02, blue: 0.045, alpha: 1)
             ]
-            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [tops[index].cgColor, bottoms[index].cgColor], locations: [0, 1]) {
+            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [tops[index].cgColor, bottoms[index].cgColor] as CFArray, locations: [0, 1]) {
                 context?.drawLinearGradient(gradient, start: tile.origin, end: CGPoint(x: tile.midX, y: tile.maxY), options: [])
             }
             if index == 1 {
@@ -721,8 +733,8 @@ enum WindowTextureFactory {
                 }
             } else if index == 2 {
                 for star in 0..<16 {
-                    let x = tile.minX + (12 + (star * 37 % 100)) * scale
-                    let y = tile.minY + (10 + (star * 29 % 70)) * scale
+                    let x = tile.minX + CGFloat(12 + (star * 37 % 100)) * scale
+                    let y = tile.minY + CGFloat(10 + (star * 29 % 70)) * scale
                     palette.accent.withAlphaComponent(0.25 + Double(star % 4) * 0.15).setFill()
                     context?.fillEllipse(in: CGRect(x: x, y: y, width: 1.8 * scale, height: 1.8 * scale))
                 }
@@ -732,7 +744,7 @@ enum WindowTextureFactory {
             context?.restoreGState()
             drawIcon(symbols[index], color: white.withAlphaComponent(0.82), pointSize: 15 * scale, in: CGRect(x: tile.minX + 10 * scale, y: tile.minY + 10 * scale, width: 24 * scale, height: 24 * scale))
             drawText(names[index], in: CGRect(x: tile.minX + 12 * scale, y: tile.maxY - 29 * scale, width: tile.width - 24 * scale, height: 25 * scale), size: 10.5 * scale, weight: .semibold, color: white)
-            roundedRect(tile, radius: 11 * scale).stroke(UIColor.white.withAlphaComponent(0.15), lineWidth: scale)
+            stroke(roundedRect(tile, radius: 11 * scale), color: UIColor.white.withAlphaComponent(0.15), lineWidth: scale)
         }
     }
 
@@ -747,7 +759,7 @@ enum WindowTextureFactory {
             let path = roundedRect(card, radius: 12 * scale)
             UIColor(red: 0.035, green: 0.07, blue: 0.11, alpha: 0.86 + Double(index) * 0.04).setFill()
             path.fill()
-            path.stroke(palette.accent.withAlphaComponent(0.12 + Double(index) * 0.08), lineWidth: scale)
+            stroke(path, color: palette.accent.withAlphaComponent(0.12 + Double(index) * 0.08), lineWidth: scale)
             for dot in 0..<3 {
                 palette.accent.withAlphaComponent(0.3).setFill()
                 UIGraphicsGetCurrentContext()?.fillEllipse(in: CGRect(x: card.minX + (11 + CGFloat(dot) * 8) * scale, y: card.minY + 11 * scale, width: 3.5 * scale, height: 3.5 * scale))

@@ -20,7 +20,7 @@ struct CalibrationView: View {
                         Text("Fit your spatial view").font(Typography.largeTitle).foregroundStyle(Theme.ink)
                     }
                     Spacer()
-                    Button("Cancel", action: onCancel).buttonStyle(QuietButtonStyle)
+                    Button("Cancel", action: onCancel).buttonStyle(QuietButtonStyle())
                 }
 
                 HStack(spacing: 24) {
@@ -32,7 +32,7 @@ struct CalibrationView: View {
                         Toggle("Motion look", isOn: $settings.motionEnabled).tint(Theme.cyan)
                         HStack {
                             Text("Motion: \(motionStatus)").font(Typography.caption).foregroundStyle(Theme.secondaryInk)
-                            Button("Recalibrate", action: motion.calibrate).buttonStyle(QuietButtonStyle)
+                            Button("Recalibrate", action: motion.calibrate).buttonStyle(QuietButtonStyle())
                         }
                     }
                     .padding(22)
@@ -50,7 +50,7 @@ struct CalibrationView: View {
                             .foregroundStyle(Theme.secondaryInk)
                             .multilineTextAlignment(.center)
                         Button(countdown > 0 ? "Enter VR in \(countdown)…" : "Enter VR", action: beginCountdown)
-                            .buttonStyle(PrimaryButtonStyle)
+                            .buttonStyle(PrimaryButtonStyle())
                             .disabled(countdown > 0)
                         Text("In VR: gaze to select, dwell to focus, swipe up/down to cycle windows. Tap the upper-right exit icon in either eye or swipe down with three fingers to leave.")
                             .font(Typography.caption)
