@@ -134,8 +134,17 @@ for (const [id, obj] of Object.entries(objects)) {
   if (['PBXSourcesBuildPhase','PBXResourcesBuildPhase','PBXFrameworksBuildPhase'].includes(obj.isa)) for (const file of obj.files || []) if (!objects[file]) missing.push(`bad phase ref ${file}`);
 }
 for (const file of ['Resources/Assets.xcassets/Contents.json','Resources/Assets.xcassets/AppIcon.appiconset/Contents.json']) JSON.parse(fs.readFileSync(file, 'utf8'));
-const privacy = JSON.parse(fs.readFileSync('Config/PrivacyInfo.xcprivacy', 'utf8'));
-const privacyTypes = new Set((privacy.NSPrivacyAccessedAPITypes || []).map(item => item.NSPrivacyAccessedAPIType));
+const privacyText = fs.readFileSync('Config/PrivacyInfo.xcprivacy', 'utf8');
+const privacyTypes = new Set();
+if (privacyText.trimStart().startsWith('{')) {
+  const privacy = JSON.parse(privacyText);
+  for (const item of privacy.NSPrivacyAccessedAPITypes || []) privacyTypes.add(item.NSPrivacyAccessedAPIType);
+} else {
+  if (!privacyText.includes('<plist') && !privacyText.includes('<dict')) throw Error('invalid privacy manifest');
+  for (const match of privacyText.matchAll(/<key>NSPrivacyAccessedAPIType<\/key>\s*<string>([^<]+)<\/string>/g)) {
+    privacyTypes.add(match[1]);
+  }
+}
 for (const type of ['NSPrivacyAccessedAPICategoryUserDefaults','NSPrivacyAccessedAPICategoryFileTimestamp']) if (!privacyTypes.has(type)) missing.push(`privacy manifest missing ${type}`);
 for (const file of ['App/Info.plist','Config/PrivacyInfo.xcprivacy','VISI0NSpatial.xcodeproj/project.xcworkspace/xcshareddata/xcschemes/VISI0NSpatial.xcscheme']) {
   const xml = fs.readFileSync(file, 'utf8');
