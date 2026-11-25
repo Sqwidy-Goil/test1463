@@ -64,7 +64,7 @@ struct FilesModuleView: View {
         .confirmationDialog("Delete this file?", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }), titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 if let file = pendingDelete {
-                    do { try DocumentStore.shared.remove(file); reload() } catch { error = error.localizedDescription }
+                    do { try DocumentStore.shared.remove(file); reload() } catch { self.error = error.localizedDescription }
                 }
                 pendingDelete = nil
             }

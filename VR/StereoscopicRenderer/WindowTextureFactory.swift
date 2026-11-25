@@ -380,7 +380,7 @@ enum WindowTextureFactory {
         drawIcon("lock", color: secondary, pointSize: 11 * scale, in: CGRect(x: address.minX + 11 * scale, y: address.minY + 8 * scale, width: 17 * scale, height: 18 * scale))
         drawText("Search or enter a local address", in: CGRect(x: address.minX + 36 * scale, y: address.minY, width: address.width - 66 * scale, height: address.height), size: 11 * scale, weight: .medium, color: tertiary)
         var card = rect.insetBy(dx: 18 * scale, dy: 0).offsetBy(dx: 0, dy: 64 * scale)
-        card.height = rect.height - 79 * scale
+        card.size.height = rect.height - 79 * scale
         panel(card, scale: scale, radius: 13, fill: palette.accent.withAlphaComponent(0.055))
         drawText("Start page", in: CGRect(x: card.minX + 17 * scale, y: card.minY + 9 * scale, width: card.width - 34 * scale, height: 23 * scale), size: 14 * scale, weight: .semibold, color: white)
         drawText("Illustrated start page", in: CGRect(x: card.minX + 17 * scale, y: card.minY + 34 * scale, width: card.width - 34 * scale, height: 19 * scale), size: 10 * scale, weight: .medium, color: secondary)

@@ -57,8 +57,11 @@ jobs:
           sudo xcode-select --switch /Applications/Xcode_16.4.app
           xcodebuild -version
 
-      - name: Download iOS Simulator runtime
-        run: xcodebuild -downloadPlatform iOS
+      - name: Ensure iOS Simulator runtime
+        run: |
+          if ! xcrun simctl list devices available | grep -q 'iPhone 16e'; then
+            xcodebuild -downloadPlatform iOS
+          fi
 
       - name: Validate project references
         run: node scripts/validate-native-project.cjs

@@ -5,7 +5,7 @@ import UIKit
 struct PhotosModuleView: View {
     @ObservedObject var coordinator: AppCoordinator
     @State private var images: [UIImage] = []
-    @State private var selection: [PHPickerResult] = []
+    @State private var selection: [PhotosPickerItem] = []
     @State private var showingPicker = false
     @State private var error: String?
 

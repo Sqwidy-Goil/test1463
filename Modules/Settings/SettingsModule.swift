@@ -33,7 +33,9 @@ struct SettingsModuleView: View {
                 }
 
                 ModuleSection(title: "Camera and hands") {
-                    Toggle("Rear camera", isOn: Binding(get: { settings.cameraEnabled }, set: { Task { await coordinator.updateCamera(enabled: $0) } })).tint(Theme.cyan)
+                    Toggle("Rear camera", isOn: Binding(get: { settings.cameraEnabled }, set: { enabled in
+                        Task { await coordinator.updateCamera(enabled: enabled) }
+                    })).tint(Theme.cyan)
                     Toggle("Hand gestures", isOn: Binding(get: { settings.handTrackingEnabled }, set: { enabled in
                         if enabled, !settings.cameraEnabled {
                             coordinator.showMessage("Enable the rear camera before starting hand tracking.")
