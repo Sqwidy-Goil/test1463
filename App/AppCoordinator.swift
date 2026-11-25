@@ -108,15 +108,21 @@ final class AppCoordinator: NSObject, ObservableObject {
     func updateCamera(enabled: Bool) async {
         settings.cameraEnabled = enabled
         cameraTask?.cancel()
+        cameraTask = nil
         guard enabled else {
             camera.stop()
             handTracking.stop()
             settings.handTrackingEnabled = false
             return
         }
-        handTracking.start()
+        if settings.handTrackingEnabled {
+            handTracking.start()
+        } else {
+            handTracking.stop()
+        }
         cameraTask = Task { [weak self] in
             let started = await self?.camera.start() ?? false
+            guard !Task.isCancelled else { return }
             if !started {
                 await MainActor.run {
                     self?.settings.cameraEnabled = false
@@ -124,6 +130,18 @@ final class AppCoordinator: NSObject, ObservableObject {
                 }
             }
         }
+    }
+
+    func stopCameraSession() {
+        cameraTask?.cancel()
+        cameraTask = nil
+        camera.stop()
+        handTracking.stop()
+    }
+
+    func restartCameraIfNeeded() async {
+        guard settings.cameraEnabled else { return }
+        await updateCamera(enabled: true)
     }
 
     func setHandTracking(enabled: Bool) {

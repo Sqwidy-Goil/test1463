@@ -201,9 +201,10 @@ final class StereoscopicRenderer {
             encoder.setViewport(MTLViewport(originX: 0, originY: 0, width: Double(target.size.width), height: Double(target.size.height), znear: 0, zfar: 1))
             let aspect = Float(target.size.width / max(target.size.height, 1))
             let camera = rig.camera(eye, aspect: aspect, fieldOfView: fov)
+            let worldCameraPosition = smoothedOrientation.act(camera.position)
             var background = BackgroundUniforms(
                 inverseViewProjection: simd_inverse(camera.viewProjection),
-                cameraPosition: SIMD4<Float>(camera.position.x, camera.position.y, camera.position.z, 1),
+                cameraPosition: SIMD4<Float>(worldCameraPosition.x, worldCameraPosition.y, worldCameraPosition.z, 1),
                 topColor: Self.color(environment.topColor),
                 bottomColor: Self.color(environment.bottomColor),
                 params: SIMD4<Float>(environment.shaderKind, environment.gridStrength, Float(now.truncatingRemainder(dividingBy: 1000)), 0)
@@ -350,10 +351,11 @@ final class StereoscopicRenderer {
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { throw RendererError.invalidTexture }
         context.draw(cgImage, in: CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height))
+        guard let pixels = context.data else { throw RendererError.invalidTexture }
         texture.replace(
             region: MTLRegionMake2D(0, 0, cgImage.width, cgImage.height),
             mipmapLevel: 0,
-            withBytes: context.data,
+            withBytes: pixels,
             bytesPerRow: context.bytesPerRow
         )
         return texture

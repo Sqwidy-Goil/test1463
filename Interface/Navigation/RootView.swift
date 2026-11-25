@@ -76,14 +76,13 @@ struct RootView: View {
                     coordinator.motion.start()
                 }
                 coordinator.permissions.refresh()
-                if coordinator.settings.cameraEnabled, coordinator.camera.status != .running {
+                if coordinator.settings.cameraEnabled, coordinator.camera.status != .running, coordinator.activeModule != .scanner {
                     Task { await coordinator.updateCamera(enabled: true) }
                 }
             case .background:
                 coordinator.flush()
                 coordinator.motion.stop()
-                coordinator.camera.stop()
-                coordinator.handTracking.stop()
+                coordinator.stopCameraSession()
             case .inactive:
                 coordinator.flush()
             @unknown default:

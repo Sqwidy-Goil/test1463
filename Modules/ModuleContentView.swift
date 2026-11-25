@@ -28,7 +28,7 @@ struct ModuleContentView: View {
                 case .video: VideoModuleView()
                 case .camera: CameraModuleView(coordinator: coordinator)
                 case .music: MusicModuleView()
-                case .scanner: ScannerModuleView()
+                case .scanner: ScannerModuleView(coordinator: coordinator)
                 case .files: FilesModuleView(coordinator: coordinator)
                 case .settings: SettingsModuleView(coordinator: coordinator)
                 case .environments: EnvironmentModuleView(coordinator: coordinator)

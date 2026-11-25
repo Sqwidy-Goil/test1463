@@ -20,13 +20,14 @@ struct WindowVertexOut {
 };
 
 vertex WindowVertexOut window_vertex(
+    uint vertexID [[vertex_id]],
     constant WindowVertex* vertices [[buffer(0)]],
     constant WindowUniforms& uniforms [[buffer(1)]]
 ) {
     WindowVertexOut out;
-    out.position = uniforms.viewProjection * uniforms.model * vertices[0].position;
-    out.uv = vertices[0].uv;
-    out.local = vertices[0].position.xy;
+    out.position = uniforms.viewProjection * uniforms.model * vertices[vertexID].position;
+    out.uv = vertices[vertexID].uv;
+    out.local = vertices[vertexID].position.xy;
     return out;
 }
 
@@ -134,7 +135,10 @@ fragment float4 post_fragment(
     float radiusSquared = dot(centered, centered);
     float2 corrected = centered * (1.0 + uniforms.params.x * radiusSquared) * 0.5 + 0.5;
     corrected = clamp(corrected, float2(0.001), float2(0.999));
-    float3 color = (isLeft ? leftEye : rightEye).sample(postSampler, corrected).rgb;
+    float3 color = leftEye.sample(postSampler, corrected).rgb;
+    if (!isLeft) {
+        color = rightEye.sample(postSampler, corrected).rgb;
+    }
 
     if (uniforms.params.y > 0.5) {
         float reticleRadius = length(eyeUV - float2(0.5));

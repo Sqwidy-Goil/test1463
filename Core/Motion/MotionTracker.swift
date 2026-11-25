@@ -31,20 +31,22 @@ final class MotionTracker: NSObject, ObservableObject {
         manager.deviceMotionUpdateInterval = 1.0 / 90.0
         manager.showsMovementRecorder = false
         manager.startDeviceMotionUpdates(using: .xArbitraryCorrectedZVertical, to: .main) { [weak self] motion, error in
-            guard let self else { return }
-            if let error {
-                status = .failed(error.localizedDescription)
-                return
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if let error {
+                    status = .failed(error.localizedDescription)
+                    return
+                }
+                guard let motion else {
+                    status = .interrupted
+                    return
+                }
+                let q = motion.attitude.quaternion
+                rawOrientation = simd_quatf(vector: SIMD4<Float>(Float(q.x), Float(q.y), Float(q.z), Float(q.w)))
+                orientation = rawOrientation * calibrationOffset
+                lastUpdate = Date()
+                status = .running
             }
-            guard let motion else {
-                status = .interrupted
-                return
-            }
-            let q = motion.attitude.quaternion
-            rawOrientation = simd_quatf(vector: SIMD4<Float>(Float(q.x), Float(q.y), Float(q.z), Float(q.w)))
-            orientation = rawOrientation * calibrationOffset
-            lastUpdate = Date()
-            status = .running
         }
         watchdog = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in

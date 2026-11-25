@@ -18,7 +18,6 @@ enum CameraStatus: Equatable {
     case failed(String)
 }
 
-@MainActor
 final class CameraService: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     @Published private(set) var status: CameraStatus = .stopped
     @Published private(set) var lastCaptureURL: URL?
@@ -32,6 +31,9 @@ final class CameraService: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     private let photoOutput = AVCapturePhotoOutput()
     private var captureDelegate: PhotoCaptureDelegate?
     private var isConfigured = false
+    private let lifecycleLock = NSLock()
+    private var lifecycleID = 0
+    private var activeLifecycleID: Int?
 
     override init() {
         previewLayer = AVCaptureVideoPreviewLayer(session: session)
@@ -48,34 +50,44 @@ final class CameraService: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     }
 
     func start() async -> Bool {
+        let runID = nextLifecycleID()
         guard !session.isRunning else {
-            status = .running
+            guard activateLifecycle(runID) else { return false }
+            updateStatus(.running, runID: runID)
             return true
         }
         guard AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) != nil else {
-            status = .unavailable("No rear camera is available.")
+            updateStatus(.unavailable("No rear camera is available."), runID: runID)
             return false
         }
-        status = .requestingPermission
+        updateStatus(.requestingPermission, runID: runID)
         let granted = await AVCaptureDevice.requestAccess(for: .video)
         guard granted else {
-            status = .permissionDenied
+            updateStatus(.permissionDenied, runID: runID)
             return false
         }
-        status = .configuring
+        guard isCurrentLifecycle(runID) else { return false }
+        updateStatus(.configuring, runID: runID)
         return await withCheckedContinuation { continuation in
             sessionQueue.async { [weak self] in
                 guard let self else {
                     continuation.resume(returning: false)
                     return
                 }
+                guard isCurrentLifecycle(runID) else {
+                    continuation.resume(returning: false)
+                    return
+                }
                 do {
                     try configureSession()
-                    session.startRunning()
-                    Task { @MainActor in status = .running }
+                    guard startSessionIfCurrent(runID) else {
+                        continuation.resume(returning: false)
+                        return
+                    }
+                    updateStatus(.running, runID: runID)
                     continuation.resume(returning: true)
                 } catch {
-                    Task { @MainActor in status = .failed(error.localizedDescription) }
+                    updateStatus(.failed(error.localizedDescription), runID: runID)
                     continuation.resume(returning: false)
                 }
             }
@@ -83,7 +95,11 @@ final class CameraService: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     }
 
     func stop() {
-        status = .stopped
+        lifecycleLock.lock()
+        lifecycleID += 1
+        activeLifecycleID = nil
+        lifecycleLock.unlock()
+        updateStatus(.stopped)
         sessionQueue.async { [weak self] in
             guard let self, session.isRunning else { return }
             session.stopRunning()
@@ -179,16 +195,63 @@ final class CameraService: NSObject, ObservableObject, AVCaptureVideoDataOutputS
     }
 
     @objc private func sessionInterrupted(_ notification: Notification) {
-        status = .interrupted
+        guard let runID = currentActiveLifecycleID() else { return }
+        updateStatus(.interrupted, runID: runID)
     }
 
     @objc private func sessionInterruptionEnded(_ notification: Notification) {
-        if session.isRunning { status = .running }
+        guard session.isRunning, let runID = currentActiveLifecycleID() else { return }
+        updateStatus(.running, runID: runID)
     }
 
     @objc private func sessionRuntimeError(_ notification: Notification) {
-        if let error = notification.userInfo?[AVCaptureSessionErrorKey] as? Error {
-            status = .failed(error.localizedDescription)
+        guard let runID = currentActiveLifecycleID(),
+              let error = notification.userInfo?[AVCaptureSessionErrorKey] as? Error else { return }
+        updateStatus(.failed(error.localizedDescription), runID: runID)
+    }
+
+    private func nextLifecycleID() -> Int {
+        lifecycleLock.lock()
+        defer { lifecycleLock.unlock() }
+        lifecycleID += 1
+        activeLifecycleID = nil
+        return lifecycleID
+    }
+
+    private func activateLifecycle(_ runID: Int) -> Bool {
+        lifecycleLock.lock()
+        defer { lifecycleLock.unlock() }
+        guard lifecycleID == runID else { return false }
+        activeLifecycleID = runID
+        return true
+    }
+
+    private func currentActiveLifecycleID() -> Int? {
+        lifecycleLock.lock()
+        defer { lifecycleLock.unlock() }
+        return activeLifecycleID
+    }
+
+    private func isCurrentLifecycle(_ runID: Int) -> Bool {
+        lifecycleLock.lock()
+        defer { lifecycleLock.unlock() }
+        return lifecycleID == runID
+    }
+
+    private func startSessionIfCurrent(_ runID: Int) -> Bool {
+        lifecycleLock.lock()
+        defer { lifecycleLock.unlock() }
+        guard lifecycleID == runID else { return false }
+        activeLifecycleID = runID
+        session.startRunning()
+        return true
+    }
+
+    private func updateStatus(_ status: CameraStatus, runID: Int? = nil) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if let runID, !isCurrentLifecycle(runID) { return }
+            self.status = status
         }
     }
 
@@ -217,7 +280,9 @@ private enum CameraError: LocalizedError {
 
 private final class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
     private let completion: (Result<Data, Error>) -> Void
+    private let lock = NSLock()
     private var timeout: DispatchWorkItem?
+    private var isFinished = false
 
     init(completion: @escaping (Result<Data, Error>) -> Void) {
         self.completion = completion
@@ -230,6 +295,10 @@ private final class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegat
     }
 
     private func finish(_ result: Result<Data, Error>) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !isFinished else { return }
+        isFinished = true
         timeout?.cancel()
         completion(result)
     }

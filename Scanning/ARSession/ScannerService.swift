@@ -254,16 +254,22 @@ final class ScannerService: ObservableObject {
         )
     }
 
-    @objc private func sessionInterruptionEnded(_ notification: Notification) {
-        sampleFrame()
+    @objc nonisolated private func sessionInterruptionEnded(_ notification: Notification) {
+        Task { @MainActor [weak self] in
+            self?.sampleFrame()
+        }
     }
 
-    @objc private func sessionWasInterrupted(_ notification: Notification) {
+    @objc nonisolated private func sessionWasInterrupted(_ notification: Notification) {
+        let message: String
         if let interruption = notification.userInfo?[ARSessionInterruptionReasonKey] as? Int {
-            trackingState = interruption == ARSessionInterruptionReason.wasSuspended.rawValue ? "Suspended" : "Interrupted"
-            status = .limited(trackingState)
+            message = interruption == ARSessionInterruptionReason.wasSuspended.rawValue ? "Suspended" : "Interrupted"
         } else {
-            status = .limited("Session interrupted")
+            message = "Session interrupted"
+        }
+        Task { @MainActor [weak self] in
+            self?.trackingState = message
+            self?.status = .limited(message)
         }
     }
 }

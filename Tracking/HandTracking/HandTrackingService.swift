@@ -1,6 +1,7 @@
 import CoreVideo
 import Foundation
 import QuartzCore
+import simd
 import Vision
 
 enum HandTrackingStatus: Equatable {
@@ -21,17 +22,21 @@ final class HandTrackingService: NSObject, ObservableObject, CameraFrameDelegate
     private let processingQueue = DispatchQueue(label: "vision-spatial.hand-tracking", qos: .userInteractive)
     private let sequenceHandler = VNSequenceRequestHandler()
     private var processor = HandGestureProcessor()
+    private var isEnabled = false
     private var lastStatusUpdate = Date.distantPast
+    private var lastPublishedStatus: HandTrackingStatus?
 
     func start() {
         status = .waitingForCamera
         processingQueue.async { [weak self] in
+            self?.isEnabled = true
             self?.processor.reset()
         }
     }
 
     func stop() {
         processingQueue.async { [weak self] in
+            self?.isEnabled = false
             self?.processor.reset()
             Task { @MainActor in
                 self?.status = .stopped
@@ -43,7 +48,8 @@ final class HandTrackingService: NSObject, ObservableObject, CameraFrameDelegate
 
     func cameraService(_ service: CameraService, didOutput pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation) {
         processingQueue.async { [weak self] in
-            self?.process(pixelBuffer, orientation: orientation)
+            guard let self, isEnabled else { return }
+            process(pixelBuffer, orientation: orientation)
         }
     }
 
@@ -85,12 +91,14 @@ final class HandTrackingService: NSObject, ObservableObject, CameraFrameDelegate
             }
             publish(.running, handCount: observations.count, pinching: processor.isPinching)
         } catch {
+            processor.reset()
             publish(.failed(error.localizedDescription), handCount: 0, pinching: false)
         }
     }
 
     private func publish(_ status: HandTrackingStatus, handCount: Int, pinching: Bool) {
-        guard Date().timeIntervalSince(lastStatusUpdate) > 0.15 || status != .noHand else { return }
+        guard status != lastPublishedStatus || Date().timeIntervalSince(lastStatusUpdate) > 0.15 else { return }
+        lastPublishedStatus = status
         lastStatusUpdate = Date()
         DispatchQueue.main.async { [weak self] in
             self?.status = status

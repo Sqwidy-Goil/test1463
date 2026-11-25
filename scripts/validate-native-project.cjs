@@ -141,5 +141,8 @@ for (const file of ['App/Info.plist','Config/PrivacyInfo.xcprivacy','VISI0NSpati
   const xml = fs.readFileSync(file, 'utf8');
   if (!xml.includes('<plist') && !xml.includes('<Scheme') && !xml.trimStart().startsWith('{')) throw Error(`invalid XML header: ${file}`);
 }
+const shader = fs.readFileSync('VR/StereoscopicRenderer/SpatialShaders.metal', 'utf8');
+if (!shader.includes('uint vertexID [[vertex_id]]') || !shader.includes('vertices[vertexID].position')) throw Error('window vertex shader must index its vertex buffer');
+if (!shader.includes('leftEye.sample') || !shader.includes('rightEye.sample')) throw Error('stereo compositor must sample both eye textures');
 if (missing.length) { console.error(missing.join('\n')); process.exit(1); }
-console.log(`Validated ${Object.keys(objects).length} project objects; ${included.size} explicit/synchronized files; target source membership, Release tests, and privacy declarations.`);
+console.log(`Validated ${Object.keys(objects).length} project objects; ${included.size} explicit/synchronized files; target source membership, Release tests, privacy declarations, and stereo shader entry points.`);

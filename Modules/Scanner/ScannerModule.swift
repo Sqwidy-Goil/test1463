@@ -4,6 +4,8 @@ import SceneKit
 import UniformTypeIdentifiers
 
 struct ScannerModuleView: View {
+    @ObservedObject var coordinator: AppCoordinator
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var scanner = ScannerService()
     @State private var scanName = "Room"
     @State private var showingImporter = false
@@ -83,8 +85,16 @@ struct ScannerModuleView: View {
                 }
             }
         }
-        .onAppear { files = scanner.scanFiles() }
-        .onDisappear { scanner.stop() }
+        .onAppear {
+            coordinator.stopCameraSession()
+            files = scanner.scanFiles()
+        }
+        .onDisappear {
+            scanner.stop()
+            if scenePhase == .active {
+                Task { await coordinator.restartCameraIfNeeded() }
+            }
+        }
     }
 }
 
