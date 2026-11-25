@@ -39,7 +39,7 @@ fragment float4 window_fragment(
 ) {
     float2 q = abs(in.local) - float2(0.5);
     float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - 0.065;
-    if (d > 0.0) discard;
+    if (d > 0.0) discard_fragment();
 
     float4 texel = content.sample(contentSampler, in.uv);
     float rim = 1.0 - smoothstep(-0.035, -0.002, d);

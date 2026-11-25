@@ -58,9 +58,7 @@ jobs:
           xcodebuild -version
 
       - name: Download iOS Simulator runtime
-        run: |
-          xcodebuild -downloadPlatform iOS
-          xcrun simctl list devices available
+        run: xcodebuild -downloadPlatform iOS
 
       - name: Validate project references
         run: node scripts/validate-native-project.cjs
