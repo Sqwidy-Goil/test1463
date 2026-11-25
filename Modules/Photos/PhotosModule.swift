@@ -67,11 +67,14 @@ struct PhotosModuleView: View {
     }
 
     private func loadSelection() {
-        for result in selection where result.itemProvider.canLoadObject(ofClass: UIImage.self) {
-            result.itemProvider.loadObject(ofClass: UIImage.self) { object, failure in
-                if let image = object as? UIImage {
-                    DispatchQueue.main.async { self.images.append(image) }
-                } else if let failure {
+        for item in selection {
+            item.loadTransferable(type: Data.self) { result in
+                switch result {
+                case .success(let data):
+                    if let image = UIImage(data: data) {
+                        DispatchQueue.main.async { self.images.append(image) }
+                    }
+                case .failure(let failure):
                     DispatchQueue.main.async { self.error = failure.localizedDescription }
                 }
             }
